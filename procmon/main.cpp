@@ -466,7 +466,7 @@ int main(int argc, char** argv)
                             {
                                 count = 0;
                                 log.writeLog(__LINE__, "error return from distributeConfigFile, waiting for Active ProcMgr to start", LOG_TYPE_DEBUG);
-                                log.writeLog(__LINE__, e.getMessage(), LOG_TYPE_DEBUG);
+                                log.writeLog(__LINE__, e.what(), LOG_TYPE_DEBUG);
                             }
 
                             sleep(1);
