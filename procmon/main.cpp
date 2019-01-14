@@ -42,7 +42,7 @@ using namespace idbdatafile;
 static void messageThread(MonitorConfig config);
 static void statusControlThread();
 static void sigchldHandleThread();
-static void	SIGCHLDHandler(int signal_number);
+static void    SIGCHLDHandler(int signal_number);
 static void chldHandleThread(MonitorConfig config);
 static void sigHupHandler(int sig);
 static void mysqlMonitorThread(MonitorConfig config);
@@ -108,9 +108,9 @@ bool getshm(const string &name, int size, bi::shared_memory_object &target) {
 
 
 /******************************************************************************************
-* @brief	main
+* @brief    main
 *
-* purpose:	Launch boot child processes and sit on read for incoming messages
+* purpose:    Launch boot child processes and sit on read for incoming messages
 *
 ******************************************************************************************/
 int main(int argc, char** argv)
@@ -166,11 +166,11 @@ int main(int argc, char** argv)
     user = getuid();
 
     if (user != 0) 
-	{
+    {
         rootUser = false;
-		SUDO = "sudo ";
-	}
-	
+        SUDO = "sudo ";
+    }
+    
     char* p = getenv("USER");
 
     if (p && *p)
@@ -228,7 +228,7 @@ int main(int argc, char** argv)
 
         //re-read local system info with updated Columnstore.xml
         sleep(1);
-//	      Config* sysConfig = Config::makeConfig();
+//          Config* sysConfig = Config::makeConfig();
         MonitorConfig config;
 
         //PMwithUM config
@@ -245,9 +245,9 @@ int main(int argc, char** argv)
         
         string mysqlpw = oam.getMySQLPassword();
 
-		string passwordOption = "";
-		if ( mysqlpw != oam::UnassignedName )
-			passwordOption = " --password=" + mysqlpw;
+        string passwordOption = "";
+        if ( mysqlpw != oam::UnassignedName )
+            passwordOption = " --password=" + mysqlpw;
 
 
         //run the module install script
@@ -279,7 +279,7 @@ int main(int argc, char** argv)
     }
     catch (...) {}
 
-	if ( cloud == "amazon-ec2" || cloud == "amazon-vpc" )
+    if ( cloud == "amazon-ec2" || cloud == "amazon-vpc" )
     {
         if (!aMonitor.amazonIPCheck())
         {
@@ -395,8 +395,8 @@ int main(int argc, char** argv)
             {
                 log.writeLog(__LINE__, "Standby PM not responding, infinidb shutting down", LOG_TYPE_CRITICAL);
                 //Set the alarm
-		//		aMonitor.sendAlarm(config.moduleName().c_str(), STARTUP_DIAGNOTICS_FAILURE, SET);
-		//		sleep (1);
+        //        aMonitor.sendAlarm(config.moduleName().c_str(), STARTUP_DIAGNOTICS_FAILURE, SET);
+        //        sleep (1);
 
                 string cmd = startup::StartUp::installDir() + "/bin/infinidb stop > /dev/null 2>&1";
 
@@ -426,7 +426,7 @@ int main(int argc, char** argv)
                     sysConfig->setConfig("ProcMgr_Alarm", "IPAddr", IPaddr);
 
                     log.writeLog(__LINE__, "set ProcMgr IPaddr to Old Standby Module: " + IPaddr, LOG_TYPE_DEBUG);
-					//update MariaDB ColumnStore Config table
+                    //update MariaDB ColumnStore Config table
                     try
                     {
                         sysConfig->write();
@@ -458,7 +458,7 @@ int main(int argc, char** argv)
                             log.writeLog(__LINE__, "Successfull return from distributeProcessFile", LOG_TYPE_DEBUG);
                             break;
                         }
-                        catch (...)
+                        catch (std::exception& e)
                         {
                             count++;
 
@@ -466,6 +466,7 @@ int main(int argc, char** argv)
                             {
                                 count = 0;
                                 log.writeLog(__LINE__, "error return from distributeConfigFile, waiting for Active ProcMgr to start", LOG_TYPE_DEBUG);
+                                log.writeLog(__LINE__, e.getMessage(), LOG_TYPE_DEBUG);
                             }
 
                             sleep(1);
@@ -611,8 +612,8 @@ int main(int argc, char** argv)
             log.writeLog(__LINE__, "Check DB mounts failed, shutting down", LOG_TYPE_CRITICAL);
 
             //Set the alarm
-		//	aMonitor.sendAlarm(config.moduleName().c_str(), STARTUP_DIAGNOTICS_FAILURE, SET);
-		//	sleep (1);
+        //    aMonitor.sendAlarm(config.moduleName().c_str(), STARTUP_DIAGNOTICS_FAILURE, SET);
+        //    sleep (1);
             string cmd = startup::StartUp::installDir() + "/bin/columnstore stop > /dev/null 2>&1";
             system(cmd.c_str());
         }
@@ -811,12 +812,12 @@ int main(int argc, char** argv)
             }
             catch (exception& ex)
             {
-//				string error = ex.what();
-//				log.writeLog(__LINE__, "EXCEPTION ERROR on getProcessStatus: " + error, LOG_TYPE_ERROR);
+//                string error = ex.what();
+//                log.writeLog(__LINE__, "EXCEPTION ERROR on getProcessStatus: " + error, LOG_TYPE_ERROR);
             }
             catch (...)
             {
-//				log.writeLog(__LINE__, "EXCEPTION ERROR on getProcessStatus: Caught unknown exception!", LOG_TYPE_ERROR);
+//                log.writeLog(__LINE__, "EXCEPTION ERROR on getProcessStatus: Caught unknown exception!", LOG_TYPE_ERROR);
             }
         }
     }
@@ -847,7 +848,7 @@ int main(int argc, char** argv)
     aMonitor.changeModLog();
 
     //update crontab
-//	aMonitor.changeCrontab();
+//    aMonitor.changeCrontab();
 
     //Read ProcessConfig file to get process list belong to this process monitor
     SystemProcessConfig systemprocessconfig;
@@ -859,11 +860,11 @@ int main(int argc, char** argv)
     catch (exception& ex)
     {
         string error = ex.what();
-//		log.writeLog(__LINE__, "EXCEPTION ERROR on getProcessConfig: " + error, LOG_TYPE_ERROR);
+//        log.writeLog(__LINE__, "EXCEPTION ERROR on getProcessConfig: " + error, LOG_TYPE_ERROR);
     }
     catch (...)
     {
-//		log.writeLog(__LINE__, "EXCEPTION ERROR on getProcessConfig: Caught unknown exception!", LOG_TYPE_ERROR);
+//        log.writeLog(__LINE__, "EXCEPTION ERROR on getProcessConfig: Caught unknown exception!", LOG_TYPE_ERROR);
     }
 
     string OAMParentModuleType = config.OAMParentName().substr(0, 2);
@@ -927,12 +928,12 @@ int main(int argc, char** argv)
                 }
                 catch (exception& ex)
                 {
-//					string error = ex.what();
-//					log.writeLog(__LINE__, "EXCEPTION ERROR on getProcessStatus: " + error, LOG_TYPE_ERROR);
+//                    string error = ex.what();
+//                    log.writeLog(__LINE__, "EXCEPTION ERROR on getProcessStatus: " + error, LOG_TYPE_ERROR);
                 }
                 catch (...)
                 {
-//					log.writeLog(__LINE__, "EXCEPTION ERROR on getProcessStatus: Caught unknown exception!", LOG_TYPE_ERROR);
+//                    log.writeLog(__LINE__, "EXCEPTION ERROR on getProcessStatus: Caught unknown exception!", LOG_TYPE_ERROR);
                 }
 
                 config.buildList(systemprocessconfig.processconfig[i].ModuleType,
@@ -979,7 +980,7 @@ int main(int argc, char** argv)
                     {
                         //there is a mate active, skip
                         (*listPtr).state = oam::COLD_STANDBY;
-                        //	sleep(1);
+                        //    sleep(1);
                         continue;
                     }
                     else if ( initType == oam::MAN_INIT )
@@ -1149,9 +1150,9 @@ int main(int argc, char** argv)
 }
 
 /******************************************************************************************
-* @brief	messageThread
+* @brief    messageThread
 *
-* purpose:	Read incoming messages
+* purpose:    Read incoming messages
 *
 ******************************************************************************************/
 static void messageThread(MonitorConfig config)
@@ -1215,21 +1216,21 @@ static void messageThread(MonitorConfig config)
                     catch (exception& ex)
                     {
                         string error = ex.what();
-//						log.writeLog(__LINE__, "EXCEPTION ERROR on fIos.read() for " + msgPort + ", error: " + error, LOG_TYPE_ERROR);
+                        log.writeLog(__LINE__, "EXCEPTION ERROR on fIos.read() for " + msgPort + ", error: " + error, LOG_TYPE_ERROR);
                     }
                     catch (...)
                     {
-//						log.writeLog(__LINE__, "EXCEPTION ERROR on fIos.read() for " + msgPort + ", Caught unknown exception!", LOG_TYPE_ERROR);
+                        log.writeLog(__LINE__, "EXCEPTION ERROR on fIos.read() for " + msgPort + ", Caught unknown exception!", LOG_TYPE_ERROR);
                     }
                 }
                 catch (exception& ex)
                 {
                     string error = ex.what();
-//					log.writeLog(__LINE__, "EXCEPTION ERROR on mqs.accept() for " + msgPort + ", error: " + error, LOG_TYPE_ERROR);
+                    log.writeLog(__LINE__, "EXCEPTION ERROR on mqs.accept() for " + msgPort + ", error: " + error, LOG_TYPE_ERROR);
                 }
                 catch (...)
                 {
-//					log.writeLog(__LINE__, "EXCEPTION ERROR on mqs.accept() for " + msgPort + ", Caught unknown exception!", LOG_TYPE_ERROR);
+                    log.writeLog(__LINE__, "EXCEPTION ERROR on mqs.accept() for " + msgPort + ", Caught unknown exception!", LOG_TYPE_ERROR);
                 }
 
                 // give time to allow Mgr to read any acks before closing
@@ -1258,9 +1259,9 @@ static void messageThread(MonitorConfig config)
 }
 
 /******************************************************************************************
-* @brief	mysqlMonitorThread
+* @brief    mysqlMonitorThread
 *
-* purpose:	monitor mysqld by getting status
+* purpose:    monitor mysqld by getting status
 *
 ******************************************************************************************/
 static void mysqlMonitorThread(MonitorConfig config)
@@ -1286,9 +1287,9 @@ static void mysqlMonitorThread(MonitorConfig config)
 }
 
 /******************************************************************************************
-* @brief	sigchldHandleThread / SIGCHLDHandler
+* @brief    sigchldHandleThread / SIGCHLDHandler
 *
-* purpose:	Catch and process dieing child processes
+* purpose:    Catch and process dieing child processes
 *
 ******************************************************************************************/
 static void sigchldHandleThread()
@@ -1300,7 +1301,7 @@ static void sigchldHandleThread()
     return;
 }
 
-static void	SIGCHLDHandler(int signal_number)
+static void    SIGCHLDHandler(int signal_number)
 {
     int status;
 
@@ -1310,10 +1311,10 @@ static void	SIGCHLDHandler(int signal_number)
 }
 
 /******************************************************************************************
-* @brief	chldHandleThread
+* @brief    chldHandleThread
 *
-* purpose:	Monitor and process dieing Non SIGCHILD SNMP child processes
-*			Also validate the internal Process status with the Process-Status disk file
+* purpose:    Monitor and process dieing Non SIGCHILD SNMP child processes
+*            Also validate the internal Process status with the Process-Status disk file
 *
 ******************************************************************************************/
 static void chldHandleThread(MonitorConfig config)
@@ -1371,8 +1372,8 @@ static void chldHandleThread(MonitorConfig config)
             {
                 while (true)
                 {
-                    int state = (*listPtr).state;	//set as default
-                    int PID = (*listPtr).processID;	//set as default
+                    int state = (*listPtr).state;    //set as default
+                    int PID = (*listPtr).processID;    //set as default
 
                     try
                     {
@@ -1399,8 +1400,8 @@ static void chldHandleThread(MonitorConfig config)
                             {
                                 // issue ALARM and update status to FAILED
                                 aMonitor.sendAlarm((*listPtr).ProcessName, PROCESS_INIT_FAILURE, SET);
-//								(*listPtr).state = oam::FAILED;
-//								aMonitor.updateProcessInfo((*listPtr).ProcessName, oam::FAILED, (*listPtr).processID);
+//                                (*listPtr).state = oam::FAILED;
+//                                aMonitor.updateProcessInfo((*listPtr).ProcessName, oam::FAILED, (*listPtr).processID);
 
                                 //force restart the un-initted process
                                 log.writeLog(__LINE__, (*listPtr).ProcessName + "/" + oam.itoa((*listPtr).processID) + " failed to init in 20 seconds, force killing it so it can restart", LOG_TYPE_CRITICAL);
@@ -1418,12 +1419,12 @@ static void chldHandleThread(MonitorConfig config)
                     catch (exception& ex)
                     {
                         string error = ex.what();
-//						log.writeLog(__LINE__, "EXCEPTION ERROR on getProcessStatus: " + error, LOG_TYPE_ERROR);
+//                        log.writeLog(__LINE__, "EXCEPTION ERROR on getProcessStatus: " + error, LOG_TYPE_ERROR);
                         break;
                     }
                     catch (...)
                     {
-//						log.writeLog(__LINE__, "EXCEPTION ERROR on getProcessStatus: Caught unknown exception!", LOG_TYPE_ERROR);
+//                        log.writeLog(__LINE__, "EXCEPTION ERROR on getProcessStatus: Caught unknown exception!", LOG_TYPE_ERROR);
                         break;
                     }
 
@@ -1467,11 +1468,11 @@ static void chldHandleThread(MonitorConfig config)
                                 catch (exception& ex)
                                 {
                                     string error = ex.what();
-//									log.writeLog(__LINE__, "EXCEPTION ERROR on setModuleStatus: " + error, LOG_TYPE_ERROR);
+//                                    log.writeLog(__LINE__, "EXCEPTION ERROR on setModuleStatus: " + error, LOG_TYPE_ERROR);
                                 }
                                 catch (...)
                                 {
-//									log.writeLog(__LINE__, "EXCEPTION ERROR on setModuleStatus: Caught unknown exception!", LOG_TYPE_ERROR);
+//                                    log.writeLog(__LINE__, "EXCEPTION ERROR on setModuleStatus: Caught unknown exception!", LOG_TYPE_ERROR);
                                 }
 
                                 break;
@@ -1517,7 +1518,7 @@ static void chldHandleThread(MonitorConfig config)
                       (*listPtr).processID != 0 ) ||
                     ( (*listPtr).state == oam::ACTIVE && (*listPtr).processID == 0 ) )
             {
-				log.writeLog(__LINE__, "*****MariaDB ColumnStore Process Restarting: " + (*listPtr).ProcessName + ", old PID = " + oam.itoa((*listPtr).processID), LOG_TYPE_CRITICAL);
+                log.writeLog(__LINE__, "*****MariaDB ColumnStore Process Restarting: " + (*listPtr).ProcessName + ", old PID = " + oam.itoa((*listPtr).processID), LOG_TYPE_CRITICAL);
 
                 if ( (*listPtr).dieCounter >= processRestartCount ||
                         processRestartCount == 0)
@@ -1576,8 +1577,8 @@ static void chldHandleThread(MonitorConfig config)
                     catch (...)
                     {}
 
-					// check if Mdoule failover is needed due to process outage
-					aMonitor.checkModuleFailover((*listPtr).ProcessName);
+                    // check if Mdoule failover is needed due to process outage
+                    aMonitor.checkModuleFailover((*listPtr).ProcessName);
 
                     //check the db health
                     if (DBFunctionalMonitorFlag == "y" )
@@ -1658,20 +1659,20 @@ static void chldHandleThread(MonitorConfig config)
                             restartStatus = " restart failed with hard failure, don't retry!!";
                             (*listPtr).processID = 0;
 
-							// check if Module failover is needed due to process outage
-							aMonitor.checkModuleFailover((*listPtr).ProcessName);
+                            // check if Module failover is needed due to process outage
+                            aMonitor.checkModuleFailover((*listPtr).ProcessName);
                             break;
                         }
                         else
                         {
                             if ( (*listPtr).processID != oam::API_MINOR_FAILURE )
-							{
+                            {
                                 //restarted successful
-                        		//Inform Process Manager that Process restart
-                        		aMonitor.processRestarted( (*listPtr).ProcessName, false);
+                                //Inform Process Manager that Process restart
+                                aMonitor.processRestarted( (*listPtr).ProcessName, false);
                                 break;
-							}
-						}
+                            }
+                        }
                         // restart failed with minor error, sleep and try
                         sleep(5);
                     }
@@ -1738,7 +1739,7 @@ static void chldHandleThread(MonitorConfig config)
                     }
 
                     //Log this event
-					log.writeLog(__LINE__, "MariaDB ColumnStore Process " + (*listPtr).ProcessName + restartStatus, LOG_TYPE_INFO);
+                    log.writeLog(__LINE__, "MariaDB ColumnStore Process " + (*listPtr).ProcessName + restartStatus, LOG_TYPE_INFO);
                 }
             }
         }
@@ -1753,9 +1754,9 @@ static void chldHandleThread(MonitorConfig config)
 }
 
 /******************************************************************************************
-* @brief	sigHupHandler
+* @brief    sigHupHandler
 *
-* purpose:	Hanlder SIGHUP signal and update internal DB
+* purpose:    Hanlder SIGHUP signal and update internal DB
 *
 ******************************************************************************************/
 static void sigHupHandler(int sig)
@@ -1791,11 +1792,11 @@ ModuleTypeConfig moduletypeconfig;
 SystemModuleTypeConfig systemModuleTypeConfig;
 SystemExtDeviceConfig systemextdeviceconfig;
 
-std::vector<string>	moduleDisableStateList;
-std::vector<string>	hostNameList;
-std::vector<string>	ipaddrNameList;
-std::vector<string>	moduleNameList;
-std::vector<string>	extDeviceNameList;
+std::vector<string>    moduleDisableStateList;
+std::vector<string>    hostNameList;
+std::vector<string>    ipaddrNameList;
+std::vector<string>    moduleNameList;
+std::vector<string>    extDeviceNameList;
 
 shmDeviceStatus* fShmNICStatus = 0;
 shmDeviceStatus* fShmDbrootStatus = 0;
@@ -1804,17 +1805,17 @@ shmDeviceStatus* fShmSystemStatus = 0;
 
 processStatusList fstatusListPtr;
 
-processStatusList*	statusListPtr()
+processStatusList*    statusListPtr()
 {
     return &fstatusListPtr;
 }
 
 
 /******************************************************************************************
-* @brief	statusControlThread
+* @brief    statusControlThread
 *
-* purpose:	Setup Status Shared-Memory table and process request to get and set
-*			into the Status Shared-Memory table
+* purpose:    Setup Status Shared-Memory table and process request to get and set
+*            into the Status Shared-Memory table
 *
 ******************************************************************************************/
 static void statusControlThread()
@@ -1837,11 +1838,11 @@ static void statusControlThread()
     catch (exception& ex)
     {
         string error = ex.what();
-//		log.writeLog(__LINE__, "EXCEPTION ERROR on getProcessConfig: " + error, LOG_TYPE_ERROR);
+//        log.writeLog(__LINE__, "EXCEPTION ERROR on getProcessConfig: " + error, LOG_TYPE_ERROR);
     }
     catch (...)
     {
-//		log.writeLog(__LINE__, "EXCEPTION ERROR on getProcessConfig: Caught unknown exception!", LOG_TYPE_ERROR);
+//        log.writeLog(__LINE__, "EXCEPTION ERROR on getProcessConfig: Caught unknown exception!", LOG_TYPE_ERROR);
     }
 
     try
@@ -1851,11 +1852,11 @@ static void statusControlThread()
     catch (exception& ex)
     {
         string error = ex.what();
-//		log.writeLog(__LINE__, "EXCEPTION ERROR on getSystemConfig: " + error, LOG_TYPE_ERROR);
+//        log.writeLog(__LINE__, "EXCEPTION ERROR on getSystemConfig: " + error, LOG_TYPE_ERROR);
     }
     catch (...)
     {
-//		log.writeLog(__LINE__, "EXCEPTION ERROR on getSystemConfig: Caught unknown exception!", LOG_TYPE_ERROR);
+//        log.writeLog(__LINE__, "EXCEPTION ERROR on getSystemConfig: Caught unknown exception!", LOG_TYPE_ERROR);
     }
 
     // build status list
@@ -1993,7 +1994,7 @@ static void statusControlThread()
     //
     //Allocate Shared Memory for storing System/Module Status Data
     //
-    fmoduleNumber++;		//add 1 to cover system status entry
+    fmoduleNumber++;        //add 1 to cover system status entry
 
     static const int SYSTEMSTATshmsize = MAX_MODULE * sizeof(shmDeviceStatus);
     memInit = true;
@@ -2132,11 +2133,11 @@ static void statusControlThread()
     catch (exception& ex)
     {
         string error = ex.what();
-//		log.writeLog(__LINE__, "EXCEPTION ERROR on getSystemConfig: " + error, LOG_TYPE_ERROR);
+//        log.writeLog(__LINE__, "EXCEPTION ERROR on getSystemConfig: " + error, LOG_TYPE_ERROR);
     }
     catch (...)
     {
-//		log.writeLog(__LINE__, "EXCEPTION ERROR on getSystemConfig: Caught unknown exception!", LOG_TYPE_ERROR);
+//        log.writeLog(__LINE__, "EXCEPTION ERROR on getSystemConfig: Caught unknown exception!", LOG_TYPE_ERROR);
     }
 
     for ( unsigned int i = 0 ; i < systemextdeviceconfig.Count; i++)
@@ -2269,7 +2270,7 @@ static void statusControlThread()
         string port = sysConfig->getConfig(portName, "Port");
         string cmd = "fuser -k " + port + "/tcp >/dev/null 2>&1";
 
-	system(cmd.c_str());
+    system(cmd.c_str());
     }
     catch (...)
     {
@@ -2353,9 +2354,9 @@ static void statusControlThread()
 }
 
 /******************************************************************************************
-* @brief	processStatusMSG
+* @brief    processStatusMSG
 *
-* purpose:	Process the status message
+* purpose:    Process the status message
 *
 ******************************************************************************************/
 void processStatusMSG(messageqcpp::IOSocket* cfIos)
@@ -2383,7 +2384,7 @@ void processStatusMSG(messageqcpp::IOSocket* cfIos)
     catch (exception& ex)
     {
         string error = ex.what();
-//		log.writeLog(__LINE__, "***read error, close create thread: " + error, LOG_TYPE_DEBUG);
+//        log.writeLog(__LINE__, "***read error, close create thread: " + error, LOG_TYPE_DEBUG);
         fIos->close();
         delete fIos;
         delete msg;
@@ -2392,7 +2393,7 @@ void processStatusMSG(messageqcpp::IOSocket* cfIos)
     }
     catch (...)
     {
-//		log.writeLog(__LINE__, "***read error, close create thread", LOG_TYPE_DEBUG);
+//        log.writeLog(__LINE__, "***read error, close create thread", LOG_TYPE_DEBUG);
         fIos->close();
         delete fIos;
         delete msg;
@@ -2402,7 +2403,7 @@ void processStatusMSG(messageqcpp::IOSocket* cfIos)
 
     if (msg->length() <= 0)
     {
-//		log.writeLog(__LINE__, "***0 bytes, close create thread", LOG_TYPE_DEBUG);
+//        log.writeLog(__LINE__, "***0 bytes, close create thread", LOG_TYPE_DEBUG);
         fIos->close();
         delete fIos;
         delete msg;
@@ -2448,7 +2449,7 @@ void processStatusMSG(messageqcpp::IOSocket* cfIos)
             if (listPtr == aPtr->end())
             {
                 // not in list
-//									log.writeLog(__LINE__, "statusControl: GET_PROC_STATUS: Process not valid: " + processName + " / " + moduleName, LOG_TYPE_DEBUG);
+//                                    log.writeLog(__LINE__, "statusControl: GET_PROC_STATUS: Process not valid: " + processName + " / " + moduleName, LOG_TYPE_DEBUG);
                 ackmsg << (ByteStream::byte) API_FAILURE;
                 fIos->write(ackmsg);
                 break;
@@ -2522,7 +2523,7 @@ void processStatusMSG(messageqcpp::IOSocket* cfIos)
                 for ( unsigned int i = 0 ; i < systemprocessconfig.processconfig.size(); i++)
                 {
                     if ( systemprocessconfig.processconfig[i].ModuleType == moduleType &&
-                            systemprocessconfig.processconfig[i].ProcessName == processName	)
+                            systemprocessconfig.processconfig[i].ProcessName == processName    )
                     {
                         if ( systemprocessconfig.processconfig[i].RunType == oam::ACTIVE_STANDBY )
                         {
@@ -2553,12 +2554,12 @@ void processStatusMSG(messageqcpp::IOSocket* cfIos)
                             catch (exception& ex)
                             {
                                 string error = ex.what();
-//													log.writeLog(__LINE__, "statusControl: EXCEPTION ERROR on getSystemConfig: " + error, LOG_TYPE_ERROR);
+//                                                    log.writeLog(__LINE__, "statusControl: EXCEPTION ERROR on getSystemConfig: " + error, LOG_TYPE_ERROR);
                                 break;
                             }
                             catch (...)
                             {
-//													log.writeLog(__LINE__, "statusControl: EXCEPTION ERROR on getSystemConfig: Caught unknown exception!", LOG_TYPE_ERROR);
+//                                                    log.writeLog(__LINE__, "statusControl: EXCEPTION ERROR on getSystemConfig: Caught unknown exception!", LOG_TYPE_ERROR);
                                 break;
                             }
                         }
@@ -2613,8 +2614,8 @@ void processStatusMSG(messageqcpp::IOSocket* cfIos)
                     log.writeLog(__LINE__, "statusControl: REQUEST RECEIVED: Set System State = " + oamState[state], LOG_TYPE_DEBUG);
                 }
 
-				BRM::DBRM dbrm;
-				dbrm.setSystemQueryReady(true);
+                BRM::DBRM dbrm;
+                dbrm.setSystemQueryReady(true);
             }
 
         }
@@ -2717,7 +2718,7 @@ void processStatusMSG(messageqcpp::IOSocket* cfIos)
                 // not in list
                 ackmsg << (ByteStream::byte) API_FAILURE;
                 fIos->write(ackmsg);
-//									log.writeLog(__LINE__, "statusControl: GET_PROC_STATUS_BY_PID: PID not valid: " + oam.itoa(PID) + " / " + moduleName);
+//                                    log.writeLog(__LINE__, "statusControl: GET_PROC_STATUS_BY_PID: PID not valid: " + oam.itoa(PID) + " / " + moduleName);
                 break;
             }
         }
@@ -2892,7 +2893,7 @@ void processStatusMSG(messageqcpp::IOSocket* cfIos)
             }
             catch (...)
             {
-//									log.writeLog(__LINE__, "statusControl: EXCEPTION ERROR on getSystemConfig: Caught unknown exception!", LOG_TYPE_ERROR);
+//                                    log.writeLog(__LINE__, "statusControl: EXCEPTION ERROR on getSystemConfig: Caught unknown exception!", LOG_TYPE_ERROR);
                 break;
             }
 
@@ -2932,7 +2933,7 @@ void processStatusMSG(messageqcpp::IOSocket* cfIos)
 
                                             for (; listPtr != aPtr->end(); ++listPtr)
                                             {
-                                                if ( systemprocessconfig.processconfig[i].ProcessName 	== (*listPtr).ProcessName &&
+                                                if ( systemprocessconfig.processconfig[i].ProcessName     == (*listPtr).ProcessName &&
                                                         moduleName == (*listPtr).ModuleName )
                                                 {
                                                     int shmIndex = (*listPtr).tableIndex;
@@ -2946,11 +2947,11 @@ void processStatusMSG(messageqcpp::IOSocket* cfIos)
                                 catch (exception& ex)
                                 {
                                     string error = ex.what();
-//														log.writeLog(__LINE__, "statusControl: EXCEPTION ERROR on getProcessConfig: " + error, LOG_TYPE_ERROR);
+//                                                        log.writeLog(__LINE__, "statusControl: EXCEPTION ERROR on getProcessConfig: " + error, LOG_TYPE_ERROR);
                                 }
                                 catch (...)
                                 {
-//														log.writeLog(__LINE__, "statusControl: EXCEPTION ERROR on getProcessConfig: Caught unknown exception!", LOG_TYPE_ERROR);
+//                                                        log.writeLog(__LINE__, "statusControl: EXCEPTION ERROR on getProcessConfig: Caught unknown exception!", LOG_TYPE_ERROR);
                                 }
 
                                 break;
@@ -2997,7 +2998,7 @@ void processStatusMSG(messageqcpp::IOSocket* cfIos)
 
                                                 for (; listPtr != aPtr->end(); ++listPtr)
                                                 {
-                                                    if ( systemprocessconfig.processconfig[i].ProcessName 	== (*listPtr).ProcessName &&
+                                                    if ( systemprocessconfig.processconfig[i].ProcessName     == (*listPtr).ProcessName &&
                                                             shmName == (*listPtr).ModuleName )
                                                     {
                                                         int shmIndex = (*listPtr).tableIndex;
@@ -3011,11 +3012,11 @@ void processStatusMSG(messageqcpp::IOSocket* cfIos)
                                     catch (exception& ex)
                                     {
                                         string error = ex.what();
-//															log.writeLog(__LINE__, "statusControl: EXCEPTION ERROR on getProcessConfig: " + error, LOG_TYPE_ERROR);
+//                                                            log.writeLog(__LINE__, "statusControl: EXCEPTION ERROR on getProcessConfig: " + error, LOG_TYPE_ERROR);
                                     }
                                     catch (...)
                                     {
-//															log.writeLog(__LINE__, "statusControl: EXCEPTION ERROR on getProcessConfig: Caught unknown exception!", LOG_TYPE_ERROR);
+//                                                            log.writeLog(__LINE__, "statusControl: EXCEPTION ERROR on getProcessConfig: Caught unknown exception!", LOG_TYPE_ERROR);
                                     }
 
                                     break;
@@ -3569,9 +3570,9 @@ void processStatusMSG(messageqcpp::IOSocket* cfIos)
 }
 
 /******************************************************************************************
-* @brief	updateShareMemory
+* @brief    updateShareMemory
 *
-* purpose:	Get and update shared memory from Parent OAM module
+* purpose:    Get and update shared memory from Parent OAM module
 *
 ******************************************************************************************/
 void updateShareMemory(processStatusList* aPtr)
@@ -3581,7 +3582,7 @@ void updateShareMemory(processStatusList* aPtr)
     ProcessMonitor aMonitor(config, log);
     Oam oam;
 
-//	log.writeLog(__LINE__, "Get Process Status shared Memory from Active OAM", LOG_TYPE_DEBUG);
+//    log.writeLog(__LINE__, "Get Process Status shared Memory from Active OAM", LOG_TYPE_DEBUG);
 
     SystemProcessStatus systemprocessstatus;
     ProcessStatus processstatus;
@@ -3617,14 +3618,14 @@ void updateShareMemory(processStatusList* aPtr)
             memcpy(fShmProcessStatus[shmIndex].StateChangeDate, stime.c_str(), DATESIZE);
         }
 
-//		log.writeLog(__LINE__, "Process Status shared Memory Initialized from Active OAM Module", LOG_TYPE_DEBUG);
+//        log.writeLog(__LINE__, "Process Status shared Memory Initialized from Active OAM Module", LOG_TYPE_DEBUG);
     }
     catch (...)
     {
         return;
     }
 
-//	log.writeLog(__LINE__, "Get System Status shared Memory from Active OAM", LOG_TYPE_DEBUG);
+//    log.writeLog(__LINE__, "Get System Status shared Memory from Active OAM", LOG_TYPE_DEBUG);
 
     SystemStatus systemstatus;
 
@@ -3640,7 +3641,7 @@ void updateShareMemory(processStatusList* aPtr)
         return;
     }
 
-//	log.writeLog(__LINE__, "Get Module Status shared Memory from Active OAM", LOG_TYPE_DEBUG);
+//    log.writeLog(__LINE__, "Get Module Status shared Memory from Active OAM", LOG_TYPE_DEBUG);
 
     std::string shmName;
     char charName[NAMESIZE];
