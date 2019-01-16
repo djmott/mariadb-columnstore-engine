@@ -520,7 +520,7 @@ int main(int argc, char** argv)
 
                     break;
                 }
-                catch (...)
+                catch (exception &e)
                 {
                     count++;
 
