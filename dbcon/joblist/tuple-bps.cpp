@@ -2239,7 +2239,7 @@ void TupleBPS::receiveMultiPrimitiveMessages(uint32_t threadID)
                     * changes made here should also be made there and vice versa. */
                     if (hasUMJoin || !fBPP->pmSendsFinalResult())
                     {
-                        joinedData = RGData(local_outputRG);
+                        joinedData.reinit(local_outputRG);
                         local_outputRG.setData(&joinedData);
                         local_outputRG.resetRowGroup(local_primRG.getBaseRid());
                         local_outputRG.setDBRoot(local_primRG.getDBRoot());
@@ -2479,7 +2479,7 @@ out:
 #endif
             i = smallOuterJoiner;
             tjoiners[i]->getUnmarkedRows(&unmatched);
-            joinedData = RGData(local_outputRG);
+            joinedData.reinit(local_outputRG);
             local_outputRG.setData(&joinedData);
             local_outputRG.resetRowGroup(-1);
             local_outputRG.getRow(0, &joinedBaseRow);
@@ -2519,7 +2519,7 @@ out:
                     else
                         rgDataToDl(joinedData, local_outputRG, dlp);
 
-                    joinedData = RGData(local_outputRG);
+                    joinedData.reinit(local_outputRG);
                     local_outputRG.setData(&joinedData);
                     local_outputRG.resetRowGroup(-1);
                     local_outputRG.getRow(0, &joinedBaseRow);

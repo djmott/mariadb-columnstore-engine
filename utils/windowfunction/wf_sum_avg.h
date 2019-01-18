@@ -24,20 +24,14 @@
 #include <set>
 #include "windowfunctiontype.h"
 
-
 namespace windowfunction
 {
-
 
 template<typename T>
 class WF_sum_avg : public WindowFunctionType
 {
 public:
-    WF_sum_avg(int id, const std::string& name) :
-        WindowFunctionType(id, name), fDistinct(id != WF__SUM && id != WF__AVG)
-    {
-        resetData();
-    }
+    WF_sum_avg(int id, const std::string& name);
 
     // pure virtual in base
     void operator()(int64_t b, int64_t e, int64_t c);
@@ -49,11 +43,12 @@ public:
 protected:
     T           fAvg;
     T           fSum;
+    double      fSumOverflow;
+    bool        fInOverflow;
     uint64_t    fCount;
     bool        fDistinct;
     std::set<T> fSet;
 };
-
 
 } // namespace
 

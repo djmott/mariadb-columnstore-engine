@@ -644,8 +644,9 @@ protected:
     inline void updateDoubleMinMax(double val1, double val2, int64_t col, int func);
     inline void updateFloatMinMax(float val1, float val2, int64_t col, int func);
     inline void updateStringMinMax(std::string val1, std::string val2, int64_t col, int func);
-    inline void updateIntSum(int64_t val1, int64_t val2, int64_t col);
-    inline void updateUintSum(uint64_t val1, uint64_t val2, int64_t col);
+    inline void convertToDouble(int64_t col, bool bUnsigned); // Used by UpdateIntSum
+    inline void updateIntSum(int64_t valIn, int64_t sum, int64_t colIn, int64_t col);
+    inline void updateUintSum(uint64_t valIn, uint64_t sum, int64_t colIn, int64_t col);
     inline void updateDoubleSum(double val1, double val2, int64_t col);
     inline void updateFloatSum(float val1, float val2, int64_t col);
 

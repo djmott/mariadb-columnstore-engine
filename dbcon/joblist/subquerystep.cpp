@@ -258,7 +258,7 @@ uint32_t SubAdapterStep::nextBand(messageqcpp::ByteStream& bs)
     if (fEndOfResult)
     {
         // send an empty / error band
-        RGData rgData(fRowGroupDeliver, 0);
+        RGData rgData(fRowGroupDeliver, 0, NULL);
         fRowGroupDeliver.setData(&rgData);
         fRowGroupDeliver.resetRowGroup(0);
         fRowGroupDeliver.setStatus(status());
@@ -396,7 +396,7 @@ void SubAdapterStep::execute()
         while (more && !cancelled())
         {
             fRowGroupIn.setData(&rgDataIn);
-            rgDataOut.reinit(fRowGroupOut, fRowGroupIn.getRowCount());
+            rgDataOut.reinit(fRowGroupOut, fRowGroupIn);
             fRowGroupOut.setData(&rgDataOut);
             fRowGroupOut.resetRowGroup(fRowGroupIn.getBaseRid());
 

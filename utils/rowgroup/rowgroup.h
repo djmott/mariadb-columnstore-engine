@@ -210,8 +210,8 @@ class RGData
 {
 public:
     RGData();   // useless unless followed by an = or a deserialize operation
-    RGData(const RowGroup& rg, uint32_t rowCount);   // allocates memory for rowData
-    explicit RGData(const RowGroup& rg);
+    RGData(const RowGroup& rg, uint32_t rowCount, RGData* rgData = NULL);   // allocates memory for rowData
+    explicit RGData(const RowGroup& rg, RGData* rgData = NULL);
     RGData(const RGData&);
     virtual ~RGData();
 
@@ -229,6 +229,7 @@ public:
     void clear();
     void reinit(const RowGroup& rg);
     void reinit(const RowGroup& rg, uint32_t rowCount);
+    void reinit(const RowGroup& rg, const RowGroup& rgSize);
     inline void setStringStore(boost::shared_ptr<StringStore>& ss)
     {
         strings = ss;
@@ -263,6 +264,15 @@ public:
     boost::shared_array<uint8_t> rowData;
     boost::shared_ptr<StringStore> strings;
     boost::shared_ptr<UserDataStore> userDataStore;
+    // MCOL-1822 use double when overflow occurs in SUM() and AVG()
+    // When PM promotes to double, that decision must be communicated back to the UM.
+    struct TypePromotion
+    {
+        int32_t   col;
+        execplan::CalpontSystemCatalog::ColDataType type;
+    };
+    typedef std::vector<TypePromotion> TypePromotions;
+    TypePromotions typePromotions;
 private:
     //boost::shared_array<uint8_t> rowData;
     //boost::shared_ptr<StringStore> strings;
@@ -1278,6 +1288,7 @@ public:
     inline uint64_t getBaseRid() const;
     void setData(RGData* rgd);
     inline void setData(uint8_t* d);
+    inline void setData();
     inline uint8_t* getData() const;
     inline RGData* getRGData() const;
 
@@ -1483,6 +1494,13 @@ inline uint8_t* RowGroup::getData() const
 {
     //assert(!useStringTable);
     return data;
+}
+
+inline void RowGroup::setData()
+{
+    data = NULL;
+    strings = NULL;
+    rgData = NULL;
 }
 
 inline RGData* RowGroup::getRGData() const
@@ -1979,6 +1997,7 @@ inline RGData& RGData::operator=(const RGData& r)
     rowData = r.rowData;
     strings = r.strings;
     userDataStore = r.userDataStore;
+    typePromotions = r.typePromotions;
     return *this;
 }
 

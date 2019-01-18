@@ -226,6 +226,9 @@ void TupleUnion::readInput(uint32_t which)
                 {
                     mutex::scoped_lock lk(uniquerMutex);
                     getOutput(&l_outputRG, &outRow, &outRGData);
+                    // MCOL-1822 inRGData contains any type changes in the input data
+                    outRGData.typePromotions = inRGData.typePromotions;
+
                     memUsageBefore = allocator.getMemUsage();
 
                     for (uint32_t i = 0; i < l_tmpRG.getRowCount(); i++, tmpRow.nextRow())
@@ -266,6 +269,8 @@ void TupleUnion::readInput(uint32_t which)
                 for (uint32_t i = 0; i < l_inputRG.getRowCount(); i++, inRow.nextRow())
                 {
                     normalize(inRow, &outRow);
+                    // MCOL-1822 inRGData contains any type changes in the input data
+                    outRGData.typePromotions = inRGData.typePromotions;
                     addToOutput(&outRow, &l_outputRG, false, outRGData);
                 }
             }
@@ -301,6 +306,8 @@ void TupleUnion::readInput(uint32_t which)
         if (distinct)
         {
             getOutput(&l_outputRG, &outRow, &outRGData);
+            // MCOL-1822 inRGData contains any type changes in the input data
+            outRGData.typePromotions = inRGData.typePromotions;
 
             if (++distinctDone == distinctCount && l_outputRG.getRowCount() > 0)
                 output->insert(outRGData);
@@ -353,7 +360,7 @@ uint32_t TupleUnion::nextBand(messageqcpp::ByteStream& bs)
         outputRG.setData(&mem);
     else
     {
-        mem = RGData(outputRG, 0);
+        mem = RGData(outputRG, 0, NULL);
         outputRG.setData(&mem);
         outputRG.resetRowGroup(0);
         outputRG.setStatus(status());
@@ -369,7 +376,7 @@ void TupleUnion::getOutput(RowGroup* rg, Row* row, RGData* data)
 {
     if (UNLIKELY(rowMemory.empty()))
     {
-        *data = RGData(*rg);
+        *data = RGData(*rg, data);
         rg->setData(data);
         rg->resetRowGroup(0);
         rowMemory.push_back(*data);
@@ -396,7 +403,7 @@ void TupleUnion::addToOutput(Row* r, RowGroup* rg, bool keepit,
             mutex::scoped_lock lock(sMutex);
             output->insert(data);
         }
-        data = RGData(*rg);
+        data = RGData(*rg, &data);
         rg->setData(&data);
         rg->resetRowGroup(0);
         rg->getRow(0, r);
@@ -941,8 +948,26 @@ void TupleUnion::run()
     runRan = true;
     lk.unlock();
 
+    
+//    uint32_t it = numeric_limits<uint32_t>::max();
+//    RowGroupDL* dl = NULL;
+//    RGData rgData;
+//    bool more = false;
+
     for (i = 0; i < fInputJobStepAssociation.outSize(); i++)
+    {
+#if 0
+        dl = fInputJobStepAssociation.outAt(i)->rowGroupDL();
+        dl->resetNumConsumers(dl->getNumConsumers()+1);
+        it = dl->getIterator();
+        more = dl->next(it, &rgData);
+        while (more)
+        {
+            more = dl->next(it, &rgData);
+        }
+#endif
         inputs.push_back(fInputJobStepAssociation.outAt(i)->rowGroupDL());
+    }
 
     output = fOutputJobStepAssociation.outAt(0)->rowGroupDL();
 

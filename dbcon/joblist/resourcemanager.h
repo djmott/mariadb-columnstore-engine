@@ -536,6 +536,7 @@ public:
     {
         return configuredUmMemLimit;
     }
+
 private:
 
     void logResourceChangeMessage(logging::LOG_TYPE logType, uint32_t sessionID, uint64_t newvalue, uint64_t value, const std::string& source, logging::Message::MessageID mid);

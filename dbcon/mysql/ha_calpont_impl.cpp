@@ -28,6 +28,7 @@
 #include <string>
 #include <iostream>
 #include <stack>
+#include <stdlib.h>
 #ifdef _MSC_VER
 #include <unordered_map>
 #include <unordered_set>
@@ -426,7 +427,32 @@ int fetchNextRow(uchar* buf, cal_table_info& ti, cal_connection_info* ci, bool h
                 {
                     colTypes[c].colPosition = c;
                     colTypes[c].colWidth = rowGroup->getColumnWidth(c);
-                    colTypes[c].colDataType = rowGroup->getColTypes()[c];
+                    // MCOL-1822 If this rgData set has a dataType change,
+                    // use that instead of the rowGroup type. For now, this
+                    // only happens if SUM(INT) and maybe AVG(INT) overflows to DOUBLE
+                    const RGData* rgData = rowGroup->getRGData();
+                    bool foundit = false;
+                    if (rgData)
+                    {
+                        for (size_t i = 0; i < rgData->typePromotions.size(); ++i)
+                        {
+                            if (rgData->typePromotions[i].col == c)
+                            {
+                                colTypes[c].colDataType = rgData->typePromotions[i].type;
+                                foundit = true;
+                                // Throw a warning
+//                                boost::shared_ptr<CalpontSystemCatalog> csc = CalpontSystemCatalog::makeCalpontSystemCatalog(0);
+//                                ostringstream oss;
+//                                oss << "Column " << csc->colName(rowGroup->getOIDs()[c]) << " has overflowed to DOUBLE. Potential loss of precision";
+//                                push_warning(current_thd, Sql_condition::WARN_LEVEL_WARN, 9999, oss.str().c_str());
+                                break;
+                            }
+                        }
+                    }
+                    if (!foundit)
+                    {
+                        colTypes[c].colDataType = rowGroup->getColTypes()[c];
+                    }
                     colTypes[c].columnOID = rowGroup->getOIDs()[c];
                     colTypes[c].scale = rowGroup->getScale()[c];
                     colTypes[c].precision = rowGroup->getPrecision()[c];

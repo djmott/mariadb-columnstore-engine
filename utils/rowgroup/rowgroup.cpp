@@ -351,13 +351,24 @@ RGData::RGData()
     //cout << "rgdata++ = " << __sync_add_and_fetch(&rgDataCount, 1) << endl;
 }
 
-RGData::RGData(const RowGroup& rg, uint32_t rowCount)
+RGData::RGData(const RowGroup& rg, uint32_t rowCount, RGData* rgData)
 {
     //cout << "rgdata++ = " << __sync_add_and_fetch(&rgDataCount, 1) << endl;
     rowData.reset(new uint8_t[rg.getDataSize(rowCount)]);
 
     if (rg.usesStringTable() && rowCount > 0)
         strings.reset(new StringStore());
+
+    // MCOL-1822 perpetuate DOUBLE promotions in aggregates
+    if (!rgData)
+    {
+        rgData = rg.getRGData();
+    }
+    if (rgData)
+    {
+        typePromotions = rgData->typePromotions;
+    }
+
 
 #ifdef VALGRIND
     /* In a PM-join, we can serialize entire tables; not every value has been
@@ -368,7 +379,7 @@ RGData::RGData(const RowGroup& rg, uint32_t rowCount)
 #endif
 }
 
-RGData::RGData(const RowGroup& rg)
+RGData::RGData(const RowGroup& rg, RGData* rgData)
 {
     //cout << "rgdata++ = " << __sync_add_and_fetch(&rgDataCount, 1) << endl;
     rowData.reset(new uint8_t[rg.getMaxDataSize()]);
@@ -376,6 +387,15 @@ RGData::RGData(const RowGroup& rg)
     if (rg.usesStringTable())
         strings.reset(new StringStore());
 
+    // MCOL-1822 perpetuate DOUBLE promotions in aggregates
+    if (!rgData)
+    {
+        rgData = rg.getRGData();
+    }
+    if (rgData)
+    {
+        typePromotions = rgData->typePromotions;
+    }
 #ifdef VALGRIND
     /* In a PM-join, we can serialize entire tables; not every value has been
      * filled in yet.  Need to look into that.  Valgrind complains that
@@ -394,6 +414,32 @@ void RGData::reinit(const RowGroup& rg, uint32_t rowCount)
     else
         strings.reset();
 
+    typePromotions.clear();
+#ifdef VALGRIND
+    /* In a PM-join, we can serialize entire tables; not every value has been
+     * filled in yet.  Need to look into that.  Valgrind complains that
+     * those bytes are uninitialized, this suppresses that error.
+     */
+    memset(rowData.get(), 0, rg.getDataSize(rowCount));
+#endif
+}
+
+void RGData::reinit(const RowGroup& rg, const RowGroup& rgSize)
+{
+    rowData.reset(new uint8_t[rg.getDataSize(rgSize.getRowCount())]);
+
+    if (rg.usesStringTable())
+        strings.reset(new StringStore());
+    else
+        strings.reset();
+
+    
+    // MCOL-1822 perpetuate DOUBLE promotions in aggregates
+    const RGData* rgData = rgSize.getRGData();
+    if (rgData)
+    {
+        typePromotions = rgData->typePromotions;
+    }
 #ifdef VALGRIND
     /* In a PM-join, we can serialize entire tables; not every value has been
      * filled in yet.  Need to look into that.  Valgrind complains that
@@ -408,7 +454,11 @@ void RGData::reinit(const RowGroup& rg)
     reinit(rg, 8192);
 }
 
-RGData::RGData(const RGData& r) : rowData(r.rowData), strings(r.strings), userDataStore(r.userDataStore)
+RGData::RGData(const RGData& r) : 
+    rowData(r.rowData), 
+    strings(r.strings), 
+    userDataStore(r.userDataStore),
+    typePromotions(r.typePromotions)
 {
     //cout << "rgdata++ = " << __sync_add_and_fetch(&rgDataCount, 1) << endl;
 }
@@ -440,6 +490,14 @@ void RGData::serialize(ByteStream& bs, uint32_t amount) const
     }
     else
         bs << (uint8_t) 0;
+
+    // MCOL-1822 move type promotions to UM
+    bs << (uint32_t)typePromotions.size();
+    for (size_t i = 0; i < typePromotions.size(); ++i)
+    {
+        bs << typePromotions[i].col;
+        bs << (int32_t)typePromotions[i].type;
+    }
 }
 
 void RGData::deserialize(ByteStream& bs, bool hasLenField)
@@ -447,6 +505,7 @@ void RGData::deserialize(ByteStream& bs, bool hasLenField)
     uint32_t amount, sig;
     uint8_t* buf;
     uint8_t tmp8;
+    int32_t tmp32;
 
     bs.peek(sig);
 
@@ -478,6 +537,19 @@ void RGData::deserialize(ByteStream& bs, bool hasLenField)
         }
         else
             userDataStore.reset();
+
+        // MCOL-1822 move type promotions to UM
+        uint32_t cnt;
+        bs >> cnt;
+        typePromotions.clear();
+        for (uint i = 0; i < cnt; ++i)
+        {
+            TypePromotion tp;
+            bs >> tp.col;
+            bs >> tmp32;
+            tp.type = static_cast<execplan::CalpontSystemCatalog::ColDataType>(tmp32);
+            typePromotions.push_back(tp);
+        }
     }
 
     return;
@@ -487,6 +559,8 @@ void RGData::clear()
 {
     rowData.reset();
     strings.reset();
+    userDataStore.reset();
+    typePromotions.clear();
 }
 
 // UserDataStore is only used for UDAF.

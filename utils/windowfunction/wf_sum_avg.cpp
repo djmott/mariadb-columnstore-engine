@@ -26,8 +26,10 @@
 using namespace std;
 
 #include <boost/shared_ptr.hpp>
+#include <boost/type_traits/is_same.hpp>
 using namespace boost;
 
+#include "configcpp.h"
 #include "loggingid.h"
 #include "errorcodes.h"
 #include "idberrorinfo.h"
@@ -155,6 +157,15 @@ uint64_t calculateAvg<uint64_t>(uint64_t sum, uint64_t count, int scale)
 namespace windowfunction
 {
 
+// Constructor
+template<typename T>
+WF_sum_avg<T>::WF_sum_avg(int id, const std::string& name) :
+    WindowFunctionType(id, name), fDistinct(id != WF__SUM && id != WF__AVG)
+{
+    resetData();
+}
+
+
 template<typename T>
 boost::shared_ptr<WindowFunctionType> WF_sum_avg<T>::makeFunction(int id, const string& name, int ct)
 {
@@ -225,6 +236,8 @@ void WF_sum_avg<T>::resetData()
 {
     fAvg = 0;
     fSum = 0;
+    fSumOverflow = 0.0;
+    fInOverflow = false;
     fCount = 0;
     fSet.clear();
 
@@ -262,11 +275,48 @@ void WF_sum_avg<T>::operator()(int64_t b, int64_t e, int64_t c)
 
             T valIn;
             getValue(colIn, valIn);
-            checkSumLimit(fSum, valIn);
 
             if ((!fDistinct) || (fSet.find(valIn) == fSet.end()))
             {
-                fSum += valIn;
+                // MCOL-1822 Overflow to double if int type.
+                if (boost::is_same<int64_t, T>::value)
+                {
+                    if (((fSum >= 0) && ((numeric_limits<int64_t>::max() - fSum) >= valIn)) ||
+                            ((fSum <  0) && ((numeric_limits<int64_t>::min() - fSum) <= valIn)))
+                    {
+                        fSum += valIn;
+                    }
+                    else if (fInOverflow)
+                    {
+                        fSumOverflow += valIn;
+                    }
+                    else // First overflow
+                    {
+                        fSumOverflow = fSumOverflow + valIn;
+                        fInOverflow = true;
+                    }
+                }
+                else if (boost::is_same<uint64_t, T>::value)
+                {
+                    if ((numeric_limits<uint64_t>::max() - fSum) >= static_cast<uint64_t>(valIn))
+                    {
+                        fSum += valIn;
+                    }
+                    else if (fInOverflow)
+                    {
+                        fSumOverflow += valIn;
+                    }
+                    else // First overflow
+                    {
+                        fSumOverflow = fSumOverflow + valIn;
+                        fInOverflow = true;
+                    }
+                }
+                else
+                {
+                    checkSumLimit(fSum, valIn);
+                    fSum += valIn;
+                }
                 fCount++;
 
                 if (fDistinct)
@@ -275,7 +325,16 @@ void WF_sum_avg<T>::operator()(int64_t b, int64_t e, int64_t c)
         }
 
         if ((fCount > 0) && (fFunctionId == WF__AVG || fFunctionId == WF__AVG_DISTINCT))
-            fAvg = (T) calculateAvg(fSum, fCount, scale);
+        {
+            if (fInOverflow)
+            {
+                fAvg = (T) calculateAvg(fSumOverflow, fCount, scale);
+            }
+            else
+            {
+                fAvg = (T) calculateAvg(fSum, fCount, scale);
+            }
+        }
     }
 
     T* v = NULL;
@@ -287,8 +346,14 @@ void WF_sum_avg<T>::operator()(int64_t b, int64_t e, int64_t c)
         else
             v = &fSum;
     }
-
-    setValue(fRow.getColType(colOut), b, e, c, v);
+    if (fInOverflow && (fFunctionId == WF__SUM || fFunctionId == WF__SUM_DISTINCT))
+    {
+        setValue(execplan::CalpontSystemCatalog::DOUBLE, b, e, c, &fSumOverflow);
+    }
+    else
+    {
+        setValue(fRow.getColType(colOut), b, e, c, v);
+    }
 
     fPrev = c;
 }

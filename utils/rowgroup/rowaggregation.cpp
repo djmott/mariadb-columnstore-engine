@@ -240,6 +240,8 @@ KeyStorage::KeyStorage(const RowGroup& keys, Row** tRow) : tmpRow(tRow), rg(keys
     rg.initRow(&row);
     rg.getRow(0, &row);
     storage.push_back(data);
+    // Can't leave rg pointing to data, an automatic variable
+    rg.setData(&(*storage.rbegin()));
     memUsage = 0;
 }
 
@@ -254,6 +256,7 @@ inline RowPosition KeyStorage::addKey()
         rg.resetRowGroup(0);
         rg.getRow(0, &row);
         storage.push_back(data);
+        rg.setData(&(*storage.rbegin()));
     }
 
     copyRow(**tmpRow, &row);
@@ -396,107 +399,281 @@ void RowAggregation::updateStringMinMax(string val1, string val2, int64_t col, i
 #endif
 }
 
-
-inline void RowAggregation::updateIntSum(int64_t val1, int64_t val2, int64_t col)
+// MCOL-1822 Convert to double id SUM/AVG overflow on INT
+inline void RowAggregation::convertToDouble(int64_t col, bool bUnsigned)
 {
-    if (isNull(fRowGroupOut, fRow, col))
+    // Push the promotion to the rgData
+    RGData::TypePromotion tp;
+    tp.col = col;
+    tp.type = execplan::CalpontSystemCatalog::DOUBLE;
+    fRowGroupOut->getRGData()->typePromotions.push_back(tp);
+
+    // Go back and convert all values already in this RowGroup
+    // We can assume they're all INT or UINT still.
+    Row row;
+    for (uint64_t j = 0; j < fRowGroupOut->getRowCount(); j++)
     {
-        fRow.setIntField(val1, col);
-    }
-    else
-    {
-#ifndef PROMOTE_AGGR_OVRFLW_TO_DBL
-
-        if (((val2 >= 0) && ((numeric_limits<int64_t>::max() - val2) >= val1)) ||
-                ((val2 <  0) && ((numeric_limits<int64_t>::min() - val2) <= val1)))
-            fRow.setIntField(val1 + val2, col);
-
-#else /* PROMOTE_AGGR_OVRFLW_TO_DBL */
-
-        if (fRow.getColTypes()[col] != execplan::CalpontSystemCatalog::DOUBLE &&
-                fRow.getColTypes()[col] != execplan::CalpontSystemCatalog::UDOUBLE)
+        // Get the user data from the row and evaluate.
+        fRowGroupOut->getRow(j, &row);
+        if (!isNull(fRowGroupOut, row, col))
         {
-            if (((val2 >= 0) && ((numeric_limits<int64_t>::max() - val2) >= val1)) ||
-                    ((val2 <  0) && ((numeric_limits<int64_t>::min() - val2) <= val1)))
+            if (bUnsigned)
             {
-                fRow.setIntField(val1 + val2, col);
+                uint64_t val = row.getUintField(col);
+                row.setDoubleField(static_cast<double>(val), col);
             }
             else
             {
-                execplan::CalpontSystemCatalog::ColDataType* cdtp = fRow.getColTypes();
-                cdtp += col;
-                *cdtp = execplan::CalpontSystemCatalog::DOUBLE;
-                updateDoubleSum((double)val1, (double)val2, col);
+                int64_t val = row.getIntField(col);
+                row.setDoubleField(static_cast<double>(val), col);
             }
-        }
-
-#endif /* PROMOTE_AGGR_OVRFLW_TO_DBL */
-        else
-        {
-#ifndef PROMOTE_AGGR_OVRFLW_TO_DBL
-            ostringstream oss;
-            oss << overflowMsg << ": " << val2 << "+" << val1;
-
-            if (val2 > 0)
-                oss << " > " << numeric_limits<int64_t>::max();
-            else
-                oss << " < " << numeric_limits<int64_t>::min();
-
-            throw logging::QueryDataExcept(oss.str(), logging::aggregateDataErr);
-#else /* PROMOTE_AGGR_OVRFLW_TO_DBL */
-            double* dp2 = (double*)&val2;
-            updateDoubleSum((double)val1, *dp2, col);
-#endif /* PROMOTE_AGGR_OVRFLW_TO_DBL */
         }
     }
 }
 
-inline void RowAggregation::updateUintSum(uint64_t val1, uint64_t val2, int64_t col)
+inline void RowAggregation::updateIntSum(int64_t valIn, int64_t sum, int64_t colIn, int64_t colOut)
 {
-    if (isNull(fRowGroupOut, fRow, col))
-    {
-        fRow.setUintField(val1, col);
-    }
-    else
-    {
-#ifndef PROMOTE_AGGR_OVRFLW_TO_DBL
+    // If we've converted to double, sum is really a double value and the bits need to
+    // be interpreted as such. Check fRowGroupOut.
+    // It's also possible that valIn is a double. Check fRowGroupIn.
+    // For the first time in this group, sum will contain some value, but it
+    // should not be used.
+    double* dsum = NULL;
+    double* dvalIn = NULL;
 
-        if ((numeric_limits<uint64_t>::max() - val2) >= val1)
-            fRow.setUintField(val1 + val2, col);
+    // Did PM send doubles for this column?
+    // Note: PM also uses this function, in which case sz is always zero and 
+    // dval is never set
+    RGData* rgData = fRowGroupIn.getRGData();
+    if (rgData)
+    {
+        RGData::TypePromotions* tps = &rgData->typePromotions;
+        for (size_t i = 0; i < tps->size(); ++i)
+        {
+            if (tps->at(i).col == colIn)
+            {
+                // This column was converted to double on the PM. Re-interpret
+                // the bits as a double
+                if (tps->at(i).type == execplan::CalpontSystemCatalog::DOUBLE)
+                {
+                    dvalIn = (double*)&valIn;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Have we converted to double already for this rowgroup?
+    rgData = fRowGroupOut->getRGData();
+    if (rgData)
+    {
+        RGData::TypePromotions* tps = &rgData->typePromotions;
+        for (size_t i = 0; i < tps->size(); ++i)
+        {
+            if (tps->at(i).col == colOut)
+            {
+                // This column was converted to double on the PM. Re-interpret
+                // the bits as a double
+                if (tps->at(i).type == execplan::CalpontSystemCatalog::DOUBLE)
+                {
+                    dsum = (double*)&sum;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (isNull(fRowGroupOut, fRow, colOut))
+    {
+        // This is the first value 
+        if (dvalIn)
+        {
+            // dvalIn exists if we are on the UM and the PM sent double
+            if (!dsum)
+            {
+                // Push the promotion notice to the output
+                RGData::TypePromotion tp;
+                tp.col = colOut;
+                tp.type = execplan::CalpontSystemCatalog::DOUBLE;
+                fRowGroupOut->getRGData()->typePromotions.push_back(tp);
+            }
+
+            fRow.setDoubleField(*dvalIn, colOut);
+        }
         else
         {
-            ostringstream oss;
-            oss << overflowMsg << ": " << val2 << "+" << val1 << " > " << numeric_limits<uint64_t>::max();
-            throw logging::QueryDataExcept(oss.str(), logging::aggregateDataErr);
-        }
-
-#else /* PROMOTE_AGGR_OVRFLW_TO_DBL */
-
-        if (fRow.getColTypes()[col] != execplan::CalpontSystemCatalog::DOUBLE &&
-                fRow.getColTypes()[col] != execplan::CalpontSystemCatalog::UDOUBLE)
-        {
-            if ((numeric_limits<uint64_t>::max() - val2) >= val1)
+            if (dsum)
             {
-                fRow.setUintField(val1 + val2, col);
+                // dsum exists if we are on the PM and this rowgroup has been promoted
+                // valIn will not have been promoted.
+                fRow.setDoubleField(static_cast<double>(valIn), colOut);
             }
             else
             {
-                execplan::CalpontSystemCatalog::ColDataType* cdtp = fRow.getColTypes();
-                cdtp += col;
-                *cdtp = execplan::CalpontSystemCatalog::DOUBLE;
-                updateDoubleSum((double)val1, (double)val2, col);
+                fRow.setIntField(valIn, colOut);
+            }
+        }
+    }
+    else
+    {
+        // If haven't yet converted to double
+        if (!dsum)
+        {
+            if (((sum >= 0) && ((numeric_limits<int64_t>::max() - sum) >= valIn))
+             || ((sum <  0) && ((numeric_limits<int64_t>::min() - sum) <= valIn)))
+            {
+                // Sum fits in int. No need to convert
+                fRow.setIntField(valIn + sum, colOut);
+            }
+            else
+            {
+                // Convert to double
+                convertToDouble(colOut, false); // Converts all previous rows of this rowGroup to double
+                if (dvalIn)
+                {
+                    fRow.setDoubleField(*dvalIn + static_cast<double>(sum), colOut);
+                }
+                else
+                {
+                    fRow.setDoubleField(static_cast<double>(valIn) + static_cast<double>(sum), colOut);
+                }
             }
         }
         else
         {
-            double* dp2 = (double*)&val2;
-            updateDoubleSum((double)val1, *dp2, col);
+            // Already converted to double.
+            if (dvalIn)
+            {
+                fRow.setDoubleField(*dvalIn + *dsum, colOut);
+            }
+            else
+            {
+                fRow.setDoubleField(static_cast<double>(valIn) + *dsum, colOut);
+            }
         }
-
-#endif /* PROMOTE_AGGR_OVRFLW_TO_DBL */
     }
 }
 
+inline void RowAggregation::updateUintSum(uint64_t valIn, uint64_t sum, int64_t colIn, int64_t colOut)
+{
+    // If we've converted to double, sum is really a double value and the bits need to
+    // be interpreted as such. Check fRowGroupOut.
+    // It's also possible that valIn is a double. Check fRowGroupIn.
+    double* dsum = NULL;
+    double* dvalIn = NULL;
+
+    // Did PM send doubles for this column?
+    // Note: PM also uses this function, in which case sz is always zero and 
+    // dval is never set
+    RGData* rgData = fRowGroupIn.getRGData();
+    if (rgData)
+    {
+        RGData::TypePromotions* tps = &rgData->typePromotions;
+        for (size_t i = 0; i < tps->size(); ++i)
+        {
+            if (tps->at(i).col == colIn)
+            {
+                // This column was converted to double on the PM. Re-interpret
+                // the bits as a double
+                if (tps->at(i).type == execplan::CalpontSystemCatalog::DOUBLE)
+                {
+                    dvalIn = (double*)&valIn;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Have we converted to double already for this rowgroup?
+    rgData = fRowGroupOut->getRGData();
+    if (rgData)
+    {
+        RGData::TypePromotions* tps = &rgData->typePromotions;
+        for (size_t i = 0; i < tps->size(); ++i)
+        {
+            if (tps->at(i).col == colOut)
+            {
+                // This column was converted to double on the PM. Re-interpret
+                // the bits as a double
+                if (tps->at(i).type == execplan::CalpontSystemCatalog::DOUBLE)
+                {
+                    dsum = (double*)&sum;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (isNull(fRowGroupOut, fRow, colOut))
+    {
+        // This is the first value
+        if (dvalIn) 
+        {
+            // dvalIn exists if we are on the UM and the PM sent double
+            if (!dsum)
+            {
+                // Push the promotion notice to the output
+                RGData::TypePromotion tp;
+                tp.col = colOut;
+                tp.type = execplan::CalpontSystemCatalog::DOUBLE;
+                fRowGroupOut->getRGData()->typePromotions.push_back(tp);
+            }
+
+            fRow.setDoubleField(*dvalIn, colOut);
+        }
+        else
+        {
+            if (dsum)
+            {
+                // dsum exists if we are on the PM and this rowgroup has been promoted
+                // valIn will not have been promoted.
+                fRow.setDoubleField(static_cast<double>(valIn), colOut);
+            }
+            else
+            {
+                fRow.setUintField(valIn, colOut);
+            }
+        }
+    }
+    else
+    {
+        // If haven't yet converted to double
+        if (!dsum)
+        {
+            if (((sum >= 0) && ((numeric_limits<uint64_t>::max() - sum) >= valIn))
+             || ((sum <  0) && ((numeric_limits<uint64_t>::min() - sum) <= valIn)))
+            {
+                // Sum fits in int. No need to convert
+                fRow.setUintField(valIn + sum, colOut);
+            }
+            else
+            {
+                // Convert to double
+                convertToDouble(colOut, true); // Converts all previous rows of this rowGroup to double
+                if (dvalIn)
+                {
+                    fRow.setDoubleField(*dvalIn + static_cast<double>(sum), colOut);
+                }
+                else
+                {
+                    fRow.setDoubleField(static_cast<double>(valIn) + static_cast<double>(sum), colOut);
+                }
+            }
+        }
+        else
+        {
+            // Already converted to double.
+            if (dvalIn)
+            {
+                fRow.setDoubleField(*dvalIn + *dsum, colOut);
+            }
+            else
+            {
+                fRow.setDoubleField(static_cast<double>(valIn) + *dsum, colOut);
+            }
+        }
+    }
+}
 inline void RowAggregation::updateDoubleSum(double val1, double val2, int64_t col)
 {
     if (isNull(fRowGroupOut, fRow, col))
@@ -742,6 +919,10 @@ RowAggregation::~RowAggregation()
 //------------------------------------------------------------------------------
 void RowAggregation::addRowGroup(const RowGroup* pRows)
 {
+    // MCOL-1822 Add rgData into fRowGroupIn so the aggregator has
+    // access to any DOUBLE promotions.
+    fRowGroupIn.setData(pRows->getRGData());
+
     // no group by == no map, everything done in fRow
     if (fGroupByCols.empty())
     {
@@ -772,7 +953,14 @@ void RowAggregation::addRowGroup(const RowGroup* pRows)
 void RowAggregation::addRowGroup(const RowGroup* pRows, vector<Row::Pointer>& inRows)
 {
     // this function is for threaded aggregation, which is for group by and distinct.
-    // if (countSpecial(pRows))
+
+    // MCOL-1822 Add rgData into fRowGroupIn so the aggregator has
+    // access to any DOUBLE promotions.
+    if (pRows->getRGData())
+    {
+        fRowGroupIn.setData(pRows->getRGData());
+    }
+
     Row rowIn;
     pRows->initRow(&rowIn);
 
@@ -1319,7 +1507,7 @@ void RowAggregation::doMinMaxSum(const Row& rowIn, int64_t colIn, int64_t colOut
             int64_t valOut = fRow.getIntField(colOut);
 
             if (funcType == ROWAGG_SUM || funcType == ROWAGG_DISTINCT_SUM)
-                updateIntSum(valIn, valOut, colOut);
+                updateIntSum(valIn, valOut, colIn, colOut);
             else
                 updateIntMinMax(valIn, valOut, colOut, funcType);
 
@@ -1336,7 +1524,7 @@ void RowAggregation::doMinMaxSum(const Row& rowIn, int64_t colIn, int64_t colOut
             uint64_t valOut = fRow.getUintField(colOut);
 
             if (funcType == ROWAGG_SUM || funcType == ROWAGG_DISTINCT_SUM)
-                updateUintSum(valIn, valOut, colOut);
+                updateUintSum(valIn, valOut, colIn, colOut);
             else
                 updateUintMinMax(valIn, valOut, colOut, funcType);
 
@@ -1765,66 +1953,9 @@ void RowAggregation::doAvg(const Row& rowIn, int64_t colIn, int64_t colOut, int6
         case execplan::CalpontSystemCatalog::UDECIMAL:
         {
             int64_t valIn = rowIn.getIntField(colIn);
-
-            if (fRow.getIntField(colAux) == 0)
-            {
-                fRow.setIntField(valIn, colOut);
-                fRow.setIntField(1, colAux);
-            }
-            else
-            {
-                int64_t valOut = fRow.getIntField(colOut);
-#ifndef PROMOTE_AGGR_OVRFLW_TO_DBL
-
-                if (((valOut >= 0) && ((numeric_limits<int64_t>::max() - valOut) >= valIn)) ||
-                        ((valOut <  0) && ((numeric_limits<int64_t>::min() - valOut) <= valIn)))
-                    fRow.setIntField(valIn + valOut, colOut);
-
-#else /* PROMOTE_AGGR_OVRFLW_TO_DBL */
-
-                if (fRow.getColTypes()[colOut] != execplan::CalpontSystemCatalog::DOUBLE)
-                {
-                    if (((valOut >= 0) && ((numeric_limits<int64_t>::max() - valOut) >= valIn)) ||
-                            ((valOut <  0) && ((numeric_limits<int64_t>::min() - valOut) <= valIn)))
-                    {
-                        fRow.setIntField(valIn + valOut, colOut);
-                        fRow.setIntField(fRow.getIntField(colAux) + 1, colAux);
-                    }
-                    else
-                    {
-                        execplan::CalpontSystemCatalog::ColDataType* cdtp = fRow.getColTypes();
-                        cdtp += colOut;
-                        *cdtp = execplan::CalpontSystemCatalog::DOUBLE;
-                        fRow.setDoubleField((double)valIn + (double)valOut, colOut);
-                        fRow.setIntField(fRow.getIntField(colAux) + 1, colAux);
-                    }
-                }
-
-#endif /* PROMOTE_AGGR_OVRFLW_TO_DBL */
-                else
-#ifndef PROMOTE_AGGR_OVRFLW_TO_DBL
-                {
-                    ostringstream oss;
-                    oss << overflowMsg << ": " << valOut << "+" << valIn;
-
-                    if (valOut > 0)
-                        oss << " > " << numeric_limits<uint64_t>::max();
-                    else
-                        oss << " < " << numeric_limits<uint64_t>::min();
-
-                    throw logging::QueryDataExcept(oss.str(), logging::aggregateDataErr);
-                }
-
-                fRow.setIntField(fRow.getIntField(colAux) + 1, colAux);
-#else /* PROMOTE_AGGR_OVRFLW_TO_DBL */
-                {
-                    double* dp = (double*)&valOut;
-                    fRow.setDoubleField((double)valIn + *dp, colOut);
-                    fRow.setIntField(fRow.getIntField(colAux) + 1, colAux);
-                }
-#endif /* PROMOTE_AGGR_OVRFLW_TO_DBL */
-            }
-
+            int64_t valOut = fRow.getIntField(colOut);
+            updateIntSum(valIn, valOut, colIn, colOut);
+            fRow.setIntField(fRow.getIntField(colAux) + 1, colAux); // Count
             break;
         }
 
@@ -1835,57 +1966,9 @@ void RowAggregation::doAvg(const Row& rowIn, int64_t colIn, int64_t colOut, int6
         case execplan::CalpontSystemCatalog::UBIGINT:
         {
             uint64_t valIn = rowIn.getUintField(colIn);
-
-            if (fRow.getUintField(colAux) == 0)
-            {
-                fRow.setUintField(valIn, colOut);
-                fRow.setUintField(1, colAux);
-            }
-            else
-            {
-                uint64_t valOut = fRow.getUintField(colOut);
-#ifndef PROMOTE_AGGR_OVRFLW_TO_DBL
-
-                if ((numeric_limits<uint64_t>::max() - valOut) >= valIn)
-                {
-                    fRow.setUintField(valIn + valOut, colOut);
-                    fRow.setUintField(fRow.getUintField(colAux) + 1, colAux);
-                }
-                else
-                {
-                    ostringstream oss;
-                    oss << overflowMsg << ": " << valOut << "+" << valIn << " > " << numeric_limits<uint64_t>::max();
-                    throw logging::QueryDataExcept(oss.str(), logging::aggregateDataErr);
-                }
-
-#else /* PROMOTE_AGGR_OVRFLW_TO_DBL */
-
-                if (fRow.getColTypes()[colOut] != execplan::CalpontSystemCatalog::DOUBLE)
-                {
-                    if ((numeric_limits<uint64_t>::max() - valOut) >= valIn)
-                    {
-                        fRow.setUintField(valIn + valOut, colOut);
-                        fRow.setUintField(fRow.getUintField(colAux) + 1, colAux);
-                    }
-                    else
-                    {
-                        execplan::CalpontSystemCatalog::ColDataType* cdtp = fRow.getColTypes();
-                        cdtp += colOut;
-                        *cdtp = execplan::CalpontSystemCatalog::DOUBLE;
-                        fRow.setDoubleField((double)valIn + (double)valOut, colOut);
-                        fRow.setUintField(fRow.getUintField(colAux) + 1, colAux);
-                    }
-                }
-                else
-                {
-                    double* dp = (double*)&valOut;
-                    fRow.setDoubleField((double)valIn + *dp, colOut);
-                    fRow.setUintField(fRow.getUintField(colAux) + 1, colAux);
-                }
-
-#endif /* PROMOTE_AGGR_OVRFLW_TO_DBL */
-            }
-
+            uint64_t valOut = fRow.getUintField(colOut);
+            updateUintSum(valIn, valOut, colIn, colOut);
+            fRow.setUintField(fRow.getUintField(colAux) + 1, colAux);
             break;
         }
 
@@ -2617,7 +2700,7 @@ void RowAggregationUM::calculateAvgColumns()
 
                 long double sum = 0.0;
                 long double avg = 0.0;
-
+                long double davg = 0.0;
                 switch (colDataType)
                 {
                     case execplan::CalpontSystemCatalog::DOUBLE:
@@ -2641,73 +2724,114 @@ void RowAggregationUM::calculateAvgColumns()
                     case execplan::CalpontSystemCatalog::BIGINT:
                     case execplan::CalpontSystemCatalog::DECIMAL:
                     case execplan::CalpontSystemCatalog::UDECIMAL:
+                    {
+                        bool bIsDbl = false;
                         sum = static_cast<long double>(fRow.getIntField(colOut));
-                        avg = sum / cnt;
-                        avg *= factor;
-                        avg += (avg < 0) ? (-0.5) : (0.5);
-
-                        if (avg > (long double) numeric_limits<int64_t>::max() ||
-                                avg < (long double) numeric_limits<int64_t>::min())
-#ifndef PROMOTE_AGGR_OVRFLW_TO_DBL
+                        // Did we overflow to double for this column?
+                        RGData* rgData = fRowGroupOut->getRGData();
+                        if (rgData)
                         {
-                            ostringstream oss;
-                            oss << overflowMsg << ": " << avg << "(incl factor " << factor;
-
-                            if (avg > 0)
-                                oss << ") > " << numeric_limits<uint64_t>::max();
-                            else
-                                oss << ") < " << numeric_limits<uint64_t>::min();
-
-                            throw logging::QueryDataExcept(oss.str(), logging::aggregateDataErr);
+                            RGData::TypePromotions* tps = &rgData->typePromotions;
+                            size_t sz = tps->size();
+                            for (size_t i = 0; i < sz; ++i)
+                            {
+                                if (tps->at(i).col == colOut)
+                                {
+                                    // This column was converted to double. Re-interpret
+                                    // the bits as a double
+                                    if (tps->at(i).type == execplan::CalpontSystemCatalog::DOUBLE)
+                                    {
+                                        sum = fRow.getDoubleField(colOut);
+                                        bIsDbl = true;
+                                        break;
+                                    }
+                                }
+                            }
                         }
 
-                        fRow.setIntField((int64_t) avg, colOut);
-#else /* PROMOTE_AGGR_OVRFLW_TO_DBL */
+                        davg = sum / cnt;
+
+                        if (bIsDbl)
                         {
-                            sum = fRow.getDoubleField(colOut);
-                            avg = sum / cnt;
-                            avg += (avg < 0) ? (-0.5) : (0.5);
-                            fRow.getColTypes()[colOut] = execplan::CalpontSystemCatalog::DOUBLE;
-                            fRow.setDoubleField(avg, colOut);
+                            fRow.setDoubleField(davg, colOut);
                         }
                         else
-                            fRow.setIntField((int64_t)avg, colOut);
+                        {
+                            // Is not yet double
+                            avg = davg * factor;
+                            avg += (avg < 0) ? (-0.5) : (0.5);
 
-#endif /* PROMOTE_AGGR_OVRFLW_TO_DBL */
+                            // After factor, we may need to overflow to double
+                            if (avg > (long double) numeric_limits<int64_t>::max() ||
+                                avg < (long double) numeric_limits<int64_t>::min())
+                            {
+                                convertToDouble(colOut, false);
+                                fRow.setDoubleField(davg, colOut);
+                            }
+                            else
+                            {
+                                fRow.setIntField((int64_t)avg, colOut);
+                            }
+                        }
                         break;
+                    }
 
                     case execplan::CalpontSystemCatalog::UTINYINT:
                     case execplan::CalpontSystemCatalog::USMALLINT:
                     case execplan::CalpontSystemCatalog::UMEDINT:
                     case execplan::CalpontSystemCatalog::UINT:
                     case execplan::CalpontSystemCatalog::UBIGINT:
+                    {
+                        bool bIsDbl = false;
                         sum = static_cast<long double>(fRow.getUintField(colOut));
-                        avg = sum / cnt;
-                        avg *= factor;
-                        avg += (avg < 0) ? (-0.5) : (0.5);
-
-                        if (avg > (long double) numeric_limits<uint64_t>::max())
-#ifndef PROMOTE_AGGR_OVRFLW_TO_DBL
+                        // Did we overflow to double for this column?
+                        RGData* rgData = fRowGroupOut->getRGData();
+                        if (rgData)
                         {
-                            ostringstream oss;
-                            oss << overflowMsg << ": " << avg << "(incl factor " << factor << ") > " << numeric_limits<uint64_t>::max();
-                            throw logging::QueryDataExcept(oss.str(), logging::aggregateDataErr);
+                            RGData::TypePromotions* tps = &rgData->typePromotions;
+                            size_t sz = tps->size();
+                            for (size_t i = 0; i < sz; ++i)
+                            {
+                                if (tps->at(i).col == colOut)
+                                {
+                                    // This column was converted to double. Re-interpret
+                                    // the bits as a double
+                                    if (tps->at(i).type == execplan::CalpontSystemCatalog::DOUBLE)
+                                    {
+                                        sum = fRow.getDoubleField(colOut);
+                                        bIsDbl = true;
+                                        break;
+                                    }
+                                }
+                            }
                         }
 
-                        fRow.setUintField((uint64_t) avg, colOut);
-#else /* PROMOTE_AGGR_OVRFLW_TO_DBL */
+                        davg = sum / cnt;
+
+                        if (bIsDbl)
                         {
-                            sum = fRow.getDoubleField(colOut);
-                            avg = sum / cnt;
-                            avg += 0.5;
-                            fRow.getColTypes()[colOut] = execplan::CalpontSystemCatalog::DOUBLE;
-                            fRow.setDoubleField(avg, colOut);
+                            fRow.setDoubleField(davg, colOut);
                         }
                         else
-                            fRow.setUintField((uint64_t)avg, colOut);
+                        {
+                            // Is not yet double
+                            avg = davg * factor;
+                            avg += (avg < 0) ? (-0.5) : (0.5);
 
-#endif /* PROMOTE_AGGR_OVRFLW_TO_DBL */
+                            // After factor, we may need to overflow to double
+                            if (avg > (long double) numeric_limits<int64_t>::max() ||
+                                avg < (long double) numeric_limits<int64_t>::min())
+                            {
+                                convertToDouble(colOut, true);
+                                fRow.setDoubleField(davg, colOut);
+                            }
+                            else
+                            {
+                                fRow.setUintField((int64_t)avg, colOut);
+                            }
+                        }
                         break;
+                    }
                 }
             }
         }
@@ -4158,18 +4282,14 @@ void RowAggregationUMP2::doAvg(const Row& rowIn, int64_t colIn, int64_t colOut, 
         case execplan::CalpontSystemCatalog::UDECIMAL:
         {
             int64_t valIn = rowIn.getIntField(colIn);
-
-            if (fRow.getIntField(colAux) == 0)
+            int64_t valOut = 0;
+            if (fRow.getIntField(colAux) > 0)
             {
-                fRow.setIntField(valIn, colOut);
-                fRow.setIntField(rowIn.getIntField(colIn + 1), colAux);
+                valOut = fRow.getIntField(colOut);
             }
-            else
-            {
-                int64_t valOut = fRow.getIntField(colOut);
-                fRow.setIntField(valIn + valOut, colOut);
-                fRow.setIntField(rowIn.getIntField(colIn + 1) + fRow.getIntField(colAux), colAux);
-            }
+            updateIntSum(valIn, valOut, colIn, colOut);
+            // Update the count
+            fRow.setIntField(rowIn.getIntField(colIn + 1) + fRow.getIntField(colAux), colAux);
 
             break;
         }
@@ -4181,18 +4301,14 @@ void RowAggregationUMP2::doAvg(const Row& rowIn, int64_t colIn, int64_t colOut, 
         case execplan::CalpontSystemCatalog::UBIGINT:
         {
             uint64_t valIn = rowIn.getUintField(colIn);
-
-            if (fRow.getUintField(colAux) == 0)
+            uint64_t valOut = 0;
+            if (fRow.getUintField(colAux) > 0)
             {
-                fRow.setUintField(valIn, colOut);
-                fRow.setUintField(rowIn.getUintField(colIn + 1), colAux);
+                valOut = fRow.getUintField(colOut);
             }
-            else
-            {
-                uint64_t valOut = fRow.getUintField(colOut);
-                fRow.setUintField(valIn + valOut, colOut);
-                fRow.setUintField(rowIn.getUintField(colIn + 1) + fRow.getUintField(colAux), colAux);
-            }
+            updateUintSum(valIn, valOut, colIn, colOut);
+            // Update the count
+            fRow.setUintField(rowIn.getUintField(colIn + 1) + fRow.getUintField(colAux), colAux);
 
             break;
         }

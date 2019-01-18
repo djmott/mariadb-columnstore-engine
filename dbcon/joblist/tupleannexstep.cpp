@@ -337,7 +337,8 @@ void TupleAnnexStep::executeNoOrderBy()
             fRowGroupIn.getRow(0, &fRowIn);
 
             // Get a new output rowgroup for each input rowgroup to preserve the rids
-            rgDataOut.reinit(fRowGroupOut, fRowGroupIn.getRowCount());
+            rgDataOut.reinit(fRowGroupOut, fRowGroupIn);
+
             fRowGroupOut.setData(&rgDataOut);
             fRowGroupOut.resetRowGroup(fRowGroupIn.getBaseRid());
             fRowGroupOut.setDBRoot(fRowGroupIn.getDBRoot());

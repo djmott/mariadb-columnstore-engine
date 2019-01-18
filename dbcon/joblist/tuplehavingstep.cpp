@@ -203,7 +203,7 @@ uint32_t TupleHavingStep::nextBand(messageqcpp::ByteStream& bs)
             }
 
             fRowGroupIn.setData(&rgDataIn);
-            rgDataOut.reinit(fRowGroupOut, fRowGroupIn.getRowCount());
+            rgDataOut.reinit(fRowGroupOut, fRowGroupIn);
             fRowGroupOut.setData(&rgDataOut);
 
             doHavingFilters();
@@ -291,7 +291,7 @@ void TupleHavingStep::execute()
         while (more && !fEndOfResult)
         {
             fRowGroupIn.setData(&rgDataIn);
-            rgDataOut.reinit(fRowGroupOut, fRowGroupIn.getRowCount());
+            rgDataOut.reinit(fRowGroupOut, fRowGroupIn);
             fRowGroupOut.setData(&rgDataOut);
 
             doHavingFilters();

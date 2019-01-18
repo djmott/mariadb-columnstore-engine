@@ -446,7 +446,7 @@ void TupleHashJoinStep::djsRelayFcn()
         if (l_largeRG.getRowCount() == 0)
             goto next;
 
-        outData.reinit(djsInputRG, l_largeRG.getRowCount());
+        outData.reinit(djsInputRG, l_largeRG);
         djsInputRG.setData(&outData);
         djsInputRG.resetRowGroup(0);
         l_largeRG.getRow(0, &l_largeRow);

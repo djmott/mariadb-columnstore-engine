@@ -395,6 +395,5 @@ bool ResourceManager::getMemory(int64_t amount, boost::shared_ptr<int64_t> sessi
     return (ret1 && ret2);
 }
 
-
 } //namespace
 
