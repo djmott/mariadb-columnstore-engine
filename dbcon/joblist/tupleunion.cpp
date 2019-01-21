@@ -236,6 +236,15 @@ void TupleUnion::readInput(uint32_t which)
                 {
                     mutex::scoped_lock lk(uniquerMutex);
                     getOutput(&l_outputRG, &outRow, &outRGData);
+                    // MCOL-1822 outRGData will have the type promotions for 
+                    // the rowgroup currently being built. If this input is different
+                    // than the output, force a new output rowgroup with the new 
+                    // promotion list.
+                    if (!(typePromotions == outRGData.typePromotions))
+                    {
+                        bForceNewRowGroup = true;
+                        outRGData.typePromotions == typePromotions;
+                    }
 
                     memUsageBefore = allocator.getMemUsage();
 
@@ -283,9 +292,12 @@ void TupleUnion::readInput(uint32_t which)
 
             bForceNewRowGroup = false;
             more = dl->next(it, &inRGData);
+            // MCOL-1822 Check for type Promotion change and save the new
+            // type promotions for this row group
             if (!(typePromotions == inRGData.typePromotions))
             {
                 bForceNewRowGroup = true;
+                typePromotions = inRGData.typePromotions;
             }
         }
     }
@@ -317,8 +329,6 @@ void TupleUnion::readInput(uint32_t which)
         if (distinct)
         {
             getOutput(&l_outputRG, &outRow, &outRGData);
-            // MCOL-1822 inRGData contains any type changes in the input data
-            outRGData.typePromotions = inRGData.typePromotions;
 
             if (++distinctDone == distinctCount && l_outputRG.getRowCount() > 0)
                 output->insert(outRGData);
