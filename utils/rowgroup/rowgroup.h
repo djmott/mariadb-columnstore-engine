@@ -270,6 +270,10 @@ public:
     {
         int32_t   col;
         execplan::CalpontSystemCatalog::ColDataType type;
+        bool operator==(const TypePromotion& tp) const
+        {
+            return col == tp.col && type == tp.type;
+        }
     };
     typedef std::vector<TypePromotion> TypePromotions;
     TypePromotions typePromotions;

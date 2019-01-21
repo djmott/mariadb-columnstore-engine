@@ -128,7 +128,7 @@ private:
 
     void getOutput(rowgroup::RowGroup* rg, rowgroup::Row* row, rowgroup::RGData* data);
     void addToOutput(rowgroup::Row* r, rowgroup::RowGroup* rg, bool keepit,
-                     rowgroup::RGData& data);
+                     rowgroup::RGData& data, bool bForceNewRowGroup);
     void normalize(const rowgroup::Row& in, rowgroup::Row* out);
     void writeNull(rowgroup::Row* out, uint32_t col);
     void readInput(uint32_t);

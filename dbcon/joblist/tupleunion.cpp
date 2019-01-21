@@ -157,7 +157,14 @@ void TupleUnion::readInput(uint32_t which)
     StepTeleStats sts;
     sts.query_uuid = fQueryUuid;
     sts.step_uuid = fStepUuid;
-
+    // MCOL-1822 promote to DOUBLE if SUM/AVG(INT) overflows.
+    // The SUM and AVG functions promote at the rowgroup level.
+    // UNION wants to consolodate rowgroups. If the output rowgroup
+    // we are currently build has a different set of promotions than
+    // a new input rowgroup, sop building the output rowgroup and 
+    // start a new one to preserve those promotions.
+    RGData::TypePromotions typePromotions;
+    bool bForceNewRowGroup = false;
     l_outputRG = outputRG;
     dl = inputs[which];
     l_inputRG = inputRGs[which];
@@ -187,6 +194,9 @@ void TupleUnion::readInput(uint32_t which)
 
         it = dl->getIterator();
         more = dl->next(it, &inRGData);
+        // MCOL-1822 save the type promotions for this row group
+        typePromotions = inRGData.typePromotions;
+        outRGData.typePromotions = inRGData.typePromotions;
 
         if (dlTimes.FirstReadTime().tv_sec == 0)
             dlTimes.setFirstReadTime();
@@ -226,8 +236,6 @@ void TupleUnion::readInput(uint32_t which)
                 {
                     mutex::scoped_lock lk(uniquerMutex);
                     getOutput(&l_outputRG, &outRow, &outRGData);
-                    // MCOL-1822 inRGData contains any type changes in the input data
-                    outRGData.typePromotions = inRGData.typePromotions;
 
                     memUsageBefore = allocator.getMemUsage();
 
@@ -241,7 +249,7 @@ void TupleUnion::readInput(uint32_t which)
                             copyRow(tmpRow, &outRow);
                             const_cast<RowPosition&>(*(inserted.first)) = RowPosition(rowMemory.size() - 1, l_outputRG.getRowCount());
                             memDiff += outRow.getRealSize();
-                            addToOutput(&outRow, &l_outputRG, true, outRGData);
+                            addToOutput(&outRow, &l_outputRG, true, outRGData, bForceNewRowGroup);
                         }
                     }
 
@@ -269,13 +277,16 @@ void TupleUnion::readInput(uint32_t which)
                 for (uint32_t i = 0; i < l_inputRG.getRowCount(); i++, inRow.nextRow())
                 {
                     normalize(inRow, &outRow);
-                    // MCOL-1822 inRGData contains any type changes in the input data
-                    outRGData.typePromotions = inRGData.typePromotions;
-                    addToOutput(&outRow, &l_outputRG, false, outRGData);
+                    addToOutput(&outRow, &l_outputRG, false, outRGData, bForceNewRowGroup);
                 }
             }
 
+            bForceNewRowGroup = false;
             more = dl->next(it, &inRGData);
+            if (!(typePromotions == inRGData.typePromotions))
+            {
+                bForceNewRowGroup = true;
+            }
         }
     }
     catch (...)
@@ -391,13 +402,13 @@ void TupleUnion::getOutput(RowGroup* rg, Row* row, RGData* data)
 }
 
 void TupleUnion::addToOutput(Row* r, RowGroup* rg, bool keepit,
-                             RGData& data)
+                             RGData& data, bool bForceNewRowGroup)
 {
     r->nextRow();
     rg->incRowCount();
     fRowsReturned++;
 
-    if (rg->getRowCount() == 8192)
+    if (rg->getRowCount() == 8192 || bForceNewRowGroup)
     {
         {
             mutex::scoped_lock lock(sMutex);
