@@ -83,7 +83,8 @@ void GroupConcatInfo::prepGroupConcat(JobInfo& jobInfo)
         SP_GroupConcat groupConcat(new GroupConcat);
         groupConcat->fSeparator = gcc->separator();
         groupConcat->fDistinct = gcc->distinct();
-        groupConcat->fSize = gcc->resultType().colWidth;
+        groupConcat->fSize = 8;
+//        groupConcat->fSize = gcc->resultType().colWidth;
         groupConcat->fRm = jobInfo.rm;
         groupConcat->fSessionMemLimit = jobInfo.umMemLimit;
 
@@ -319,13 +320,20 @@ GroupConcatAgUM::~GroupConcatAgUM()
 void GroupConcatAgUM::initialize()
 {
     if (fGroupConcat->fDistinct || fGroupConcat->fOrderCols.size() > 0)
+    {
+//        cerr << "GroupConcatAgUM::initialize OrderBy " << endl;
         fConcator.reset(new GroupConcatOrderBy());
+    }
     else
+    {
+  //      cerr << "GroupConcatAgUM::initialize no OrderBy " << endl;
         fConcator.reset(new GroupConcatNoOrder());
+    }
 
     fConcator->initialize(fGroupConcat);
 
     fGroupConcat->fRowGroup.initRow(&fRow, true);
+    //cerr << "GroupConcatAgUM::initialize fRow size " << fRow.getSize() << endl;
     fData.reset(new uint8_t[fRow.getSize()]);
     fRow.setData(fData.get());
 }

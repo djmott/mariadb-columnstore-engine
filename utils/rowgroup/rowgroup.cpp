@@ -64,7 +64,7 @@ StringStore& StringStore::operator=(const StringStore&)
 
 StringStore::~StringStore()
 {
-#if 0
+#if 0 
     // for mem usage debugging
     uint32_t i;
     uint64_t inUse = 0, allocated = 0;
@@ -84,6 +84,7 @@ StringStore::~StringStore()
 
 uint64_t StringStore::storeString(const uint8_t* data, uint32_t len)
 {
+//    cerr << "StringStore::storeString " << len << endl;
     MemChunk* lastMC = NULL;
     uint64_t ret = 0;
 
@@ -167,7 +168,7 @@ void StringStore::serialize(ByteStream& bs) const
     {
         mc = (MemChunk*) mem[i].get();
         bs << (uint64_t) mc->currentSize;
-        //cout << "serialized " << mc->currentSize << " bytes\n";
+        //cerr << "serialized " << mc->currentSize << " bytes\n";
         bs.append(mc->data, mc->currentSize);
     }
 
@@ -199,7 +200,7 @@ void StringStore::deserialize(ByteStream& bs)
     for (i = 0; i < count; i++)
     {
         bs >> size;
-        //cout << "deserializing " << size << " bytes\n";
+        //cerr << "deserializing " << size << " bytes\n";
         buf = bs.buf();
         mem[i].reset(new uint8_t[size + sizeof(MemChunk)]);
         mc = (MemChunk*) mem[i].get();
@@ -228,6 +229,12 @@ void StringStore::deserialize(ByteStream& bs)
 
 void StringStore::clear()
 {
+    for(int i = 0; i < mem.size(); i++)
+    {
+    //    cerr << "StringStore::clear use_count " << mem[i].use_count() << endl;
+        mem[i].reset();
+    }
+    longStrings.clear();
     vector<shared_array<uint8_t> > emptyv;
     vector<shared_array<uint8_t> > emptyv2;
     mem.swap(emptyv);
@@ -387,12 +394,26 @@ RGData::RGData(const RowGroup& rg)
 
 void RGData::reinit(const RowGroup& rg, uint32_t rowCount)
 {
+    this->clear();
+    //uint8_t* tmpPtr1 = new uint8_t[rg.getDataSize(rowCount)];
+    //rowData.reset();
     rowData.reset(new uint8_t[rg.getDataSize(rowCount)]);
+    //rowData.reset(tmpPtr1);
+   // delete tmpPtr1;
 
+    //StringStore* tmpPtr2 = new StringStore();
     if (rg.usesStringTable())
+    {
+        cerr << "RGData::reinit strings.use_count 1 " << strings.use_count() << endl;
         strings.reset(new StringStore());
+        //strings.reset(tmpPtr2);
+        //delete tmpPtr2;
+    }
     else
+    {
+        cerr << "RGData::reinit strings.use_count 2 " << strings.use_count() << endl;
         strings.reset();
+    }
 
 #ifdef VALGRIND
     /* In a PM-join, we can serialize entire tables; not every value has been
@@ -1211,12 +1232,12 @@ int64_t Row::getSignedNullValue(uint32_t colIndex) const
 RowGroup::RowGroup() : columnCount(0), data(NULL), rgData(NULL), strings(NULL),
     useStringTable(true), hasLongStringField(false), sTableThreshold(20)
 {
-    oldOffsets.reserve(1024);
-    oids.reserve(1024);
-    keys.reserve(1024);
-    types.reserve(1024);
-    scale.reserve(1024);
-    precision.reserve(1024);
+    oldOffsets.reserve(10);
+    oids.reserve(10);
+    keys.reserve(10);
+    types.reserve(10);
+    scale.reserve(10);
+    precision.reserve(10);
 }
 
 RowGroup::RowGroup(uint32_t colCount,
