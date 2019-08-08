@@ -1,0 +1,35 @@
+# https://confluence.atlassian.com/bamboo/bamboo-yaml-specs-938844479.html
+
+---
+version: 2
+plan:
+  project-key: MDBCS
+  key: MDBCS
+  name: MariaDB with ColumnStore
+
+# List of plan's stages and jobs
+stages:
+  - Build binaries:
+    - Build
+  - Build unit tests:
+    - Build
+  - Static Analysis:
+    - Build
+  - Dynamic Analysis:
+    - Build
+
+#Job definition
+Build:
+  tasks:
+    - script:
+        - printenv | sort | tee /tmp/bamboo.build.environment.log
+#    - test-parser:
+#        type: junit
+#        test-results: '**/junit/*.xml' 
+  # Job's requirements
+#  requirements:
+3     - isRocketFuel
+  # Job's artifacts. Artifacts are shared by default.
+  artifacts:
+     - name: Build environment
+       pattern: /tmp/bamboo.build.environment.log
