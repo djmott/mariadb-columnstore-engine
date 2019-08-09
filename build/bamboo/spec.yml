@@ -33,3 +33,4 @@ Build:
   artifacts:
      - name: Build environment
        pattern: /tmp/bamboo.build.environment.log
+       
