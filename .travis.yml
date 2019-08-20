@@ -17,7 +17,7 @@ before_install:
   - mkdir -p $TRAVIS_BUILD_DIR/{.build,.reports}
   - pip install --user cpp-coveralls
   - sudo apt-get update -qq
-  - sudo apt-get install -y -qq lcov gcovr curl unzip valgrind rats cppcheck vera++ uuid-dev libboost-all-dev build-essential automake bison cmake libncurses5-dev libreadline-dev libperl-dev jemalloc
+  - sudo apt-get install -y -qq lcov gcovr curl unzip valgrind rats cppcheck vera++ uuid-dev libboost-all-dev build-essential automake bison cmake libncurses5-dev libreadline-dev libperl-dev libjemalloc-dev
   - git submodule init
   - git submodule update
 #  - cd $TRAVIS_BUILD_DIR/3rdparty
