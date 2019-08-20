@@ -13,7 +13,8 @@ include:
     env:  COMPILER=g++-5
 
 before_install:
-  - mkdir -p  $TRAVIS_BUILD_DIR/.reports/{cppcheck,gcov,gtest,make,oclint,rats,valgrind,vera++,lcov,gcov,scan-build,clang-tidy,clang-format}
+#  - mkdir -p  $TRAVIS_BUILD_DIR/.reports/{cppcheck,gcov,gtest,make,oclint,rats,valgrind,vera++,lcov,gcov,scan-build,clang-tidy,clang-format}
+  - mkdir -p $TRAVIS_BUILD_DIR/{.build,.reports}
   - pip install --user cpp-coveralls
   - sudo apt-get update -qq
   - sudo apt-get install -y -qq lcov gcovr curl unzip valgrind rats cppcheck vera++ uuid-dev
@@ -27,9 +28,9 @@ before_install:
 #  - export PATH=$PWD/sonar-scanner-2.6.1/bin:$PWD/build-wrapper-linux-x86:$PATH
 script:
   - cd $TRAVIS_BUILD_DIR/.build
-  - cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=TRUE .. 2>&1 | tee ../.reports/make/cmake.log
-  - cmake --build . --parallel $(( 1 + $(nproc) )) --target all 2>&1 | tee ../.reports/make/cmake.all.log
-  - cmake --build . --parallel $(( 1 + $(nproc) )) --target package 2>&1 | tee ../.reports/make/cmake.package.log
+  - cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=TRUE .. 2>&1 | tee $TRAVIS_BUILD_DIR/.reports/cmake.configure.log
+  - cmake --build . --parallel $(( 1 + $(nproc) )) --target all 2>&1 | tee $TRAVIS_BUILD_DIR/.reports/cmake.build.all.log
+  - cmake --build . --parallel $(( 1 + $(nproc) )) --target package 2>&1 | tee $TRAVIS_BUILD_DIR/.reports/cmake.package.log
 #  - build-wrapper-linux-x86-64 --out-dir . make clean all package
 #  - $TRAVIS_BUILD_DIR/build/tests/unit_tests --xml:$TRAVIS_BUILD_DIR/.reports/gtest
 #  - cd $TRAVIS_BUILD_DIR/
