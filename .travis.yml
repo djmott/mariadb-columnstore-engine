@@ -17,6 +17,8 @@ include:
 
 before_install:
 #  - mkdir -p  $TRAVIS_BUILD_DIR/.reports/{cppcheck,gcov,gtest,make,oclint,rats,valgrind,vera++,lcov,gcov,scan-build,clang-tidy,clang-format}
+  - git submodule init
+  - git submodule update
   - mkdir -p $TRAVIS_BUILD_DIR/{.build,.reports}
   - pip install --user cpp-coveralls
   - sudo apt-get update -qq
@@ -26,8 +28,6 @@ before_install:
   - sudo apt-get install -y -qq  libkrb5-dev libncurses5-dev libncurses5-dev libpam-dev libperl-dev libperl-dev 
   - sudo apt-get install -y -qq  libreadline-dev libreadline-dev libreadline-dev libsnappy-dev libssl-dev libxml2-dev 
   - sudo apt-get install -y -qq  ltrace net-tools pkg-config rsyslog shellcheck ssh strace unzip uuid-dev valgrind vera++ vim wget zlib1g-dev
-  - git submodule init
-  - git submodule update
 #  - cd $TRAVIS_BUILD_DIR/3rdparty
 #  - wget https://sonarsource.bintray.com/Distribution/sonar-scanner-cli/sonar-scanner-2.6.1.zip
 #  - wget https://sonarqube.com/static/cpp/build-wrapper-linux-x86.zip
