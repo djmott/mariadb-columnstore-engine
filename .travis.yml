@@ -20,7 +20,12 @@ before_install:
   - mkdir -p $TRAVIS_BUILD_DIR/{.build,.reports}
   - pip install --user cpp-coveralls
   - sudo apt-get update -qq
-  - sudo apt-get install -y -qq lcov gcovr curl unzip valgrind shellcheck cppcheck vera++ uuid-dev libboost-all-dev build-essential automake bison cmake libncurses5-dev libreadline-dev libperl-dev libjemalloc-dev checkinstall
+  - sudo apt-get install -y -qq  atop automake automake bison bison bsdmainutils build-essential build-essential 
+  - sudo apt-get install -y -qq  checkinstall cmake cmake cppcheck curl expect flex gcovr gdb git iputils-ping lcov 
+  - sudo apt-get install -y -qq  less libboost-all-dev libboost-all-dev libcurl4-openssl-dev libjemalloc-dev libjemalloc-dev 
+  - sudo apt-get install -y -qq  libkrb5-dev libncurses5-dev libncurses5-dev libpam-dev libperl-dev libperl-dev 
+  - sudo apt-get install -y -qq  libreadline-dev libreadline-dev libreadline-dev libsnappy-dev libssl-dev libxml2-dev 
+  - sudo apt-get install -y -qq  ltrace net-tools pkg-config rsyslog shellcheck ssh strace unzip uuid-dev valgrind vera++ vim wget zlib1g-dev
   - git submodule init
   - git submodule update
 #  - cd $TRAVIS_BUILD_DIR/3rdparty
