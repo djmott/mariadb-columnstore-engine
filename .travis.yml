@@ -1,0 +1,60 @@
+sudo: required
+dist: trusty
+language: cpp
+matrix:
+include:
+  - compiler: gcc
+    addons:
+      apt:
+        sources:
+          - ubuntu-toolchain-r-test
+        packages:
+          - g++-5
+    env:  COMPILER=g++-5
+
+before_install:
+  - mkdir -p  $TRAVIS_BUILD_DIR/.reports/{cppcheck,gcov,gtest,make,oclint,rats,valgrind,vera++,lcov,gcov,scan-build,clang-tidy,clang-format}
+  - pip install --user cpp-coveralls
+  - sudo apt-get update -qq
+  - sudo apt-get install -y -qq lcov gcovr curl unzip valgrind rats cppcheck vera++ uuid-dev
+  - git submodule init
+  - git submodule update
+#  - cd $TRAVIS_BUILD_DIR/3rdparty
+#  - wget https://sonarsource.bintray.com/Distribution/sonar-scanner-cli/sonar-scanner-2.6.1.zip
+#  - wget https://sonarqube.com/static/cpp/build-wrapper-linux-x86.zip
+#  - unzip sonar-scanner-2.6.1.zip
+#  - unzip build-wrapper-linux-x86.zip
+#  - export PATH=$PWD/sonar-scanner-2.6.1/bin:$PWD/build-wrapper-linux-x86:$PATH
+script:
+  - cd $TRAVIS_BUILD_DIR/.build
+  - cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=TRUE .. 2>&1 | tee ../.reports/make/cmake.log
+  - cmake --build . --parallel $(( 1 + $(nproc) )) --target all 2>&1 | tee ../.reports/make/cmake.all.log
+  - cmake --build . --parallel $(( 1 + $(nproc) )) --target package 2>&1 | tee ../.reports/make/cmake.package.log
+#  - build-wrapper-linux-x86-64 --out-dir . make clean all package
+#  - $TRAVIS_BUILD_DIR/build/tests/unit_tests --xml:$TRAVIS_BUILD_DIR/.reports/gtest
+#  - cd $TRAVIS_BUILD_DIR/
+#  - valgrind --tool=memcheck -v --trace-children=yes --xml=yes --xml-file=.reports/valgrind/unit_tests.memcheck.xml $TRAVIS_BUILD_DIR/build/tests/unit_tests
+#  - for item in $(find src -type f); do vera++ -x .reports/vera++/$(basename $item).xml $item > /dev/null; done
+#  - for item in $(find include -type f); do vera++ -x .reports/vera++/$(basename $item).xml $item > /dev/null; done
+#  - for item in $(find include -name *.hpp); do cppcheck --inline-suppr --suppressions-list=assets/cppcheck-suppressions.txt --std=c++11 --platform=unix64 --enable=all --xml-version=2 $item 2> .reports/cppcheck/$(basename $item).xml; done
+#  - for item in $(find src -name *.cpp); do cppcheck --inline-suppr --suppressions-list=assets/cppcheck-suppressions.txt --std=c++11 --platform=unix64 --enable=all --xml-version=2 $item 2> .reports/cppcheck/$(basename $item).xml; done
+#  - rats --xml -w 3 src include > .reports/rats/rats.xml
+#  - cd $TRAVIS_BUILD_DIR/build/tests
+#  - if [ -e "$(ls *.xml)" ]; then cp *.xml $TRAVIS_BUILD_DIR/.reports/gtest; fi
+#  - for item in $( find -name '*.gcda' ); do gcov -l $item; done
+#  - for item in $( find -name '*.gcda' ); do gcovr -x -r .  > $TRAVIS_BUILD_DIR/.reports/gcov/$(basename $item).xml; done
+#  - cd $TRAVIS_BUILD_DIR/
+#  - cp assets/sonar* .
+#  - sonar-scanner -e -X -Dsonar.host.url=https://sonarcloud.io -Dsonar.login=$SONAR_TOKEN -Dsonar.github.oauth=$SONAR_GITHUB_TOKEN
+success:
+#  - cd $TRAVIS_BUILD_DIR/docs/html
+#  - git init
+#  - git remote add docs git@github.com:djmott/xtd-docs.git
+#  - git pull
+#  - cd $TRAVIS_BUILD_DIR/build
+#  - make docs
+#  - cd $TRAVIS_BUILD_DIR/docs/html
+#  - git commit -am "travis-ci documentation update"
+#  - git push docs master
+after_success:
+  - coveralls
